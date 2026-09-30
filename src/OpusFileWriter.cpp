@@ -4,6 +4,8 @@
 
 #include <opus/opusenc.h>
 
+#include <cerrno>
+
 namespace {
 
 int WritePage(void* user, const unsigned char* data, opus_int32 length) {
@@ -24,22 +26,26 @@ OpusFileWriter::~OpusFileWriter() {
     Close();
 }
 
-bool OpusFileWriter::Open(const std::wstring& path, const std::wstring& title, int bitrate,
+bool OpusFileWriter::Open(const std::wstring& path, const std::wstring& title, int bitrate, int channels,
                           std::wstring& error) {
     // libopusenc's own file helper uses narrow fopen, which mangles non-ASCII
     // Windows paths, so the file is opened here and handed over via callbacks.
     FILE* file = nullptr;
-    if (_wfopen_s(&file, path.c_str(), L"wb") != 0 || !file) {
-        error = L"Couldn't create " + path;
+    // "x" makes this fail rather than truncate if the file exists, so an
+    // existing recording is never overwritten.
+    errno_t result = _wfopen_s(&file, path.c_str(), L"wbx");
+    if (result != 0 || !file) {
+        error = result == EEXIST ? L"The recording file already exists: " + path : L"Couldn't create " + path;
         return false;
     }
 
     comments_ = ope_comments_create();
     ope_comments_add(comments_, "TITLE", ToUtf8(title).c_str());
     ope_comments_add(comments_, "ENCODER", "CallRecorder " CALLRECORDER_VERSION);
+    if (channels == 2) ope_comments_add(comments_, "CHANNELS", "left:microphone,right:others");
 
     int status = OPE_OK;
-    encoder_ = ope_encoder_create_callbacks(&kCallbacks, file, comments_, kSampleRate, 1, 0, &status);
+    encoder_ = ope_encoder_create_callbacks(&kCallbacks, file, comments_, kSampleRate, channels, 0, &status);
     if (!encoder_) {
         std::fclose(file);
         ope_comments_destroy(comments_);
@@ -58,8 +64,8 @@ bool OpusFileWriter::Open(const std::wstring& path, const std::wstring& title, i
     return true;
 }
 
-bool OpusFileWriter::Write(const float* samples, int count) {
-    return encoder_ && ope_encoder_write_float(encoder_, samples, count) == OPE_OK;
+bool OpusFileWriter::Write(const float* samples, int frames) {
+    return encoder_ && ope_encoder_write_float(encoder_, samples, frames) == OPE_OK;
 }
 
 void OpusFileWriter::Close() {
