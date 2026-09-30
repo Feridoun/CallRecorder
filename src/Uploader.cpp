@@ -135,7 +135,7 @@ void Uploader::Run() {
         std::string token = ReadSpeakrToken();
         std::unique_ptr<HttpClient> http;
         if (config.serverUrl.empty() || token.empty()) {
-            SetBlocker(L"Speakr isn't set up yet. Choose Speakr connection in the tray menu.");
+            SetBlocker(L"Speakr isn't set up yet. Open Settings from the tray menu.");
         } else {
             http = std::make_unique<HttpClient>(config.serverUrl, token);
             std::lock_guard lock(mutex_);
@@ -195,7 +195,7 @@ bool Uploader::IsGlobalFailure(const HttpResponse& response) {
         return true;
     }
     if (response.status == 401 || response.status == 403) {
-        SetBlocker(L"Speakr rejected the API token. Enter a new one under Speakr connection in the tray menu.");
+        SetBlocker(L"Speakr rejected the API token. Enter a new one in Settings from the tray menu.");
         return true;
     }
     if (response.status == 429 || response.status >= 500) {

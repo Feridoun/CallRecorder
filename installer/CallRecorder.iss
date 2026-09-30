@@ -70,7 +70,7 @@ Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Registry]
-; The same value the app's own "Start at login" menu item manages.
+; The same value the app's own Start at login setting manages.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "CallRecorder"; \
     ValueData: """{app}\{#MyAppExeName}"""; Tasks: startup
 
@@ -120,7 +120,7 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then begin
-    // Also covers the entry made by the app's own "Start at login" item.
+    // Also covers the entry made by the app's own Start at login setting.
     RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'CallRecorder');
     RegDeleteValue(HKEY_CURRENT_USER, ApprovedKey, 'CallRecorder');
   end;

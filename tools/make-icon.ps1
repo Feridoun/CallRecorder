@@ -1,6 +1,9 @@
 # Draws res\CallRecorder.ico: a red record dot in a speech bubble, at the
 # sizes Windows asks for (16 to 256 px, PNG-compressed entries).
 #   powershell -ExecutionPolicy Bypass -File tools\make-icon.ps1
+# -StoreLogo writes build\store\logo-1080.png for the Microsoft Store listing
+# instead.
+param([switch]$StoreLogo)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
@@ -36,6 +39,15 @@ function New-IconImage([int]$size) {
     $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
     $bitmap.Dispose()
     return , $stream.ToArray()
+}
+
+if ($StoreLogo) {
+    $dir = Join-Path (Split-Path -Parent $PSScriptRoot) 'build\store'
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    $path = Join-Path $dir 'logo-1080.png'
+    [System.IO.File]::WriteAllBytes($path, (New-IconImage 1080))
+    "Wrote $path"
+    return
 }
 
 $sizes = 16, 20, 24, 32, 40, 48, 64, 256

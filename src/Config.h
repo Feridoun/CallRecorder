@@ -16,13 +16,9 @@ struct Config {
 
     static std::wstring Path();
     static Config Load();  // writes the defaults file if it doesn't exist
-    // Change one setting in the file, leaving the others as they are.
-    static bool SaveServerUrl(const std::wstring& url) { return SaveString("server_url", url); }
-    static bool SaveMicrophone(const std::wstring& id) { return SaveString("microphone", id); }
-    static bool SaveSpeakers(const std::wstring& id) { return SaveString("speakers", id); }
-
-private:
-    static bool SaveString(const char* key, const std::wstring& value);
+    // Writes every setting above, keeping the file's key order and any keys
+    // this version doesn't know.
+    bool Save() const;
 };
 
 // Tidies a pasted Speakr address: adds https:// if there's no scheme and

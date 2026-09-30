@@ -20,7 +20,7 @@ add_executable(CallRecorder WIN32
     src/main.cpp
     src/Autostart.cpp
     src/Config.cpp
-    src/ConnectionDialog.cpp
+    src/SettingsDialog.cpp
     src/HttpClient.cpp
     src/OpusFileWriter.cpp
     src/Recorder.cpp

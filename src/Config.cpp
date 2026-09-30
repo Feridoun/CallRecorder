@@ -64,7 +64,7 @@ Config Config::Load() {
     return config;
 }
 
-bool Config::SaveString(const char* key, const std::wstring& value) {
+bool Config::Save() const {
     Load();  // make sure the file exists
     std::wstring path = Path();
     if (path.empty()) return false;
@@ -75,7 +75,14 @@ bool Config::SaveString(const char* key, const std::wstring& value) {
         j = nlohmann::ordered_json::parse(in, nullptr, /*allow_exceptions=*/false);
     }
     if (j.is_discarded() || !j.is_object()) j = nlohmann::ordered_json::object();
-    j[key] = ToUtf8(value);
+    j["server_url"] = ToUtf8(serverUrl);
+    j["tags"] = nlohmann::ordered_json::array();
+    for (const auto& tag : tags) j["tags"].push_back(ToUtf8(tag));
+    j["hotwords"] = ToUtf8(hotwords);
+    j["keep_audio_days"] = keepAudioDays;
+    j["sensitive_by_default"] = sensitiveByDefault;
+    j["microphone"] = ToUtf8(microphone);
+    j["speakers"] = ToUtf8(speakers);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     return static_cast<bool>(out << j.dump(2) << "\n");
 }

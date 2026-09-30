@@ -7,23 +7,46 @@
 IDI_APP ICON "CallRecorder.ico"
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "CallRecorder.manifest"
 
-IDD_CONNECTION DIALOGEX 0, 0, 300, 150
+IDD_SETTINGS DIALOGEX 0, 0, 320, 300
 STYLE DS_SHELLFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 EXSTYLE WS_EX_APPWINDOW
-CAPTION "CallRecorder: Speakr connection"
+CAPTION "CallRecorder settings"
 FONT 9, "Segoe UI"
 BEGIN
-    LTEXT "CallRecorder uploads your recordings to your own Speakr server, which transcribes and summarises them.",
-          -1, 10, 8, 280, 18
-    LTEXT "Speakr address", -1, 10, 32, 280, 9
-    EDITTEXT IDC_URL, 10, 42, 280, 13, ES_AUTOHSCROLL
-    LTEXT "API token (create one in Speakr under Account settings > API tokens)", -1, 10, 62, 280, 9
-    EDITTEXT IDC_TOKEN, 10, 72, 280, 13, ES_AUTOHSCROLL | ES_PASSWORD
-    LTEXT "The token is kept in Windows Credential Manager, never in a file.", -1, 10, 88, 280, 9
-    LTEXT "", IDC_STATUS, 10, 104, 280, 18
-    PUSHBUTTON "&Test", IDC_TEST, 10, 128, 50, 14
-    DEFPUSHBUTTON "&Save", IDOK, 184, 128, 50, 14
-    PUSHBUTTON "Cancel", IDCANCEL, 240, 128, 50, 14
+    GROUPBOX "Speakr connection", -1, 7, 5, 306, 98
+    LTEXT "Recordings upload to your Speakr server for transcripts and summaries.",
+          -1, 14, 17, 292, 9
+    LTEXT "&Address", -1, 14, 33, 58, 9
+    EDITTEXT IDC_URL, 76, 31, 230, 13, ES_AUTOHSCROLL
+    LTEXT "API &token", -1, 14, 50, 58, 9
+    EDITTEXT IDC_TOKEN, 76, 48, 230, 13, ES_AUTOHSCROLL | ES_PASSWORD
+    LTEXT "Create one in Speakr under Account settings > API tokens. It's kept in Windows Credential Manager, never in a file.",
+          -1, 76, 63, 230, 17
+    PUSHBUTTON "T&est", IDC_TEST, 14, 83, 50, 14
+    LTEXT "", IDC_STATUS, 76, 82, 230, 17
+
+    GROUPBOX "Audio devices", -1, 7, 108, 306, 50
+    LTEXT "&Microphone", -1, 14, 123, 58, 9
+    COMBOBOX IDC_MIC, 76, 121, 230, 150, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT "&Playback", -1, 14, 140, 58, 9
+    COMBOBOX IDC_SPEAKERS, 76, 138, 230, 150, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    GROUPBOX "Recordings", -1, 7, 163, 306, 110
+    LTEXT "Default ta&gs", -1, 14, 178, 58, 9
+    EDITTEXT IDC_TAGS, 76, 176, 230, 13, ES_AUTOHSCROLL
+    LTEXT "Comma-separated. Ticked in the Tags menu each time CallRecorder starts.", -1, 76, 191, 230, 9
+    LTEXT "&Hotwords", -1, 14, 206, 58, 9
+    EDITTEXT IDC_HOTWORDS, 76, 204, 230, 13, ES_AUTOHSCROLL
+    LTEXT "Comma-separated names and jargon to help transcription.", -1, 76, 219, 230, 9
+    LTEXT "&Keep audio", -1, 14, 234, 58, 9
+    EDITTEXT IDC_KEEP_DAYS, 76, 232, 28, 13, ES_NUMBER
+    LTEXT "days after Speakr is done with it (0 = forever)", -1, 109, 234, 197, 9
+    AUTOCHECKBOX "Start in &local-only (sensitive) mode", IDC_SENSITIVE, 14, 250, 292, 10
+    AUTOCHECKBOX "Start CallRecorder when I sign &in to Windows", IDC_AUTOSTART, 14, 261, 292, 10
+
+    PUSHBUTTON "Open settings &file", IDC_OPEN_FILE, 7, 280, 76, 14
+    DEFPUSHBUTTON "&Save", IDOK, 207, 280, 50, 14
+    PUSHBUTTON "Cancel", IDCANCEL, 263, 280, 50, 14
 END
 
 VS_VERSION_INFO VERSIONINFO

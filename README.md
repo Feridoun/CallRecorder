@@ -43,8 +43,8 @@ On first start, CallRecorder asks for:
 2. **An API token.** In Speakr, open *Account settings > API tokens* and create
    one. CallRecorder keeps it in Windows Credential Manager, never in a file.
 
-Click **Test** to check both, then **Save**. You can change them later from the
-tray menu under **Speakr connection**.
+Click **Test** to check both, then **Save**. You can change them later under
+**Settings** in the tray menu.
 
 ## Use
 
@@ -56,9 +56,8 @@ A grey dot appears in the tray.
 | Pause / resume (paused time is left out) | `Ctrl+Alt+P` | menu |
 | Add a marker | `Ctrl+Alt+K` | menu |
 
-Click the icon for the menu, which also has **Sensitive**, **Tags**,
-**Microphone** and **Playback** device pickers, upload status, **Upload now**, **Open Speakr**, the recordings folder, settings and
-**Start at login**.
+Click the icon for the menu, which also has **Sensitive**, **Tags**, upload
+status, **Upload now**, **Open Speakr**, the recordings folder and **Settings**.
 
 Tray icon colours: **grey** idle, **red** recording, **purple** recording in
 local-only mode, **amber** paused. Hover over it for the elapsed time and upload
@@ -72,16 +71,16 @@ open the recording in Speakr.
 
 **Tags** in the tray menu lists your Speakr tags. Ticked tags apply to the
 recording in progress and to the ones after it, until you change them. Each
-launch starts with the tags in `config.json` ticked (`Call` by default). A tag
-listed in `config.json` that doesn't exist in Speakr yet is created on the
+launch starts with the **Default tags** from Settings ticked (`Call` by
+default). A default tag that doesn't exist in Speakr yet is created on the
 first upload.
 
 ### Audio devices
 
 By default CallRecorder records Windows' default communications microphone and
 default playback device, and follows them when they change. To record a
-specific device instead, pick it under **Microphone** or **Playback** in the
-tray menu. The choice is saved and takes effect straight away, even
+specific device instead, pick it under **Microphone** or **Playback** in
+**Settings**. The choice takes effect as soon as you save, even
 mid-recording. If the chosen device isn't connected, CallRecorder uses the
 Windows default and switches back when the device returns.
 
@@ -103,8 +102,14 @@ people on the call.
 
 ## Settings
 
-Tray menu > **Settings** opens `%APPDATA%\CallRecorder\config.json`. Changes
-apply within 10 minutes, or straight away after **Upload now**.
+Tray menu > **Settings** has everything in one window: the Speakr connection,
+audio devices, default tags, hotwords, how long to keep audio, local-only mode
+at launch and **Start CallRecorder when I sign in to Windows**. Saved changes
+apply straight away.
+
+The settings live in `%APPDATA%\CallRecorder\config.json` (**Open settings
+file** in the Settings window). Edits made by hand apply within 10 minutes, or
+straight away after **Upload now**.
 
 ```json
 {
@@ -120,12 +125,12 @@ apply within 10 minutes, or straight away after **Upload now**.
 
 | Key | Meaning |
 |---|---|
-| `server_url` | Your Speakr address. It's easier to set it through **Speakr connection** |
+| `server_url` | Your Speakr address |
 | `tags` | Tags ticked when CallRecorder starts |
 | `hotwords` | Comma-separated names and jargon to help transcription, e.g. `"Anika, Kubernetes, SLA"` |
 | `keep_audio_days` | Delete local audio this many days after Speakr has finished with it (0 = keep forever). Local-only and failed recordings are never deleted |
 | `sensitive_by_default` | Start every launch in local-only mode |
-| `microphone`, `speakers` | Windows device IDs to record; empty follows the Windows default. Set them from the tray menu |
+| `microphone`, `speakers` | Windows device IDs to record; empty follows the Windows default. Easiest to pick in **Settings** |
 
 ## Where recordings go
 
@@ -188,7 +193,7 @@ To build the installer and portable zip as well (needs
 | `src/OpusFileWriter.*` | Crash-tolerant Ogg Opus output |
 | `src/Session.*` | The `.json` file for each recording, and crash recovery |
 | `src/Uploader.*` | Background upload queue, Speakr status polling, tag lookup, audio retention |
-| `src/ConnectionDialog.*` | The Speakr connection dialog |
+| `src/SettingsDialog.*` | The Settings window: Speakr connection, devices and the rest of `config.json` |
 | `src/HttpClient.*` | WinHTTP client (streams uploads from disk) |
 | `src/Config.*` | `config.json` and the Credential Manager token |
 | `installer/CallRecorder.iss` | Inno Setup script |
@@ -201,6 +206,11 @@ To build the installer and portable zip as well (needs
 - Configurable hotkeys
 
 Issues and pull requests are welcome.
+
+## Privacy
+
+CallRecorder has no telemetry and only talks to the Speakr server you set up.
+See the [privacy policy](PRIVACY.md).
 
 ## Licence
 

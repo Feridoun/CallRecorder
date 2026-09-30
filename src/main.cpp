@@ -3,9 +3,9 @@
 
 #include "Autostart.h"
 #include "Config.h"
-#include "ConnectionDialog.h"
 #include "Recorder.h"
 #include "Session.h"
+#include "SettingsDialog.h"
 #include "Uploader.h"
 #include "Util.h"
 #include "resource.h"
@@ -29,18 +29,13 @@ static_assert(kTrayMessage != Recorder::kWarningMessage && kTrayMessage != Uploa
 constexpr UINT kTrayId = 1;
 constexpr UINT_PTR kTooltipTimer = 1;
 constexpr UINT_PTR kMenuTimer = 2;  // delays the left-click menu so a double-click can win
-constexpr UINT_PTR kSetupTimer = 3;  // opens the connection dialog on first run, once the tray is up
+constexpr UINT_PTR kSetupTimer = 3;  // opens Settings on first run, once the tray is up
 constexpr double kMinimumSeconds = 2.0;  // shorter sessions are treated as accidental
 
 enum Command : UINT {
     kToggle = 100, kPause, kMarker, kSensitive, kUploadNow, kRetryRefused, kOpenSpeakr, kSettings, kOpenFolder, kExit,
-    kAutostart, kConnection,
     kTagFirst = 1000,  // kTagFirst + i toggles App::menuTags[i]
     kTagLast = 1999,
-    kMicFirst = 2000,  // kMicFirst + i records from App::menuMics[i]
-    kMicLast = 2099,
-    kSpeakersFirst = 2100,  // kSpeakersFirst + i records App::menuSpeakers[i]
-    kSpeakersLast = 2199,
 };
 
 struct Hotkey {
@@ -71,8 +66,6 @@ struct App {
     bool sensitive = false;  // applies to the current session and the next one
     std::vector<std::wstring> tags;      // Speakr tags for the current session and the next one
     std::vector<std::wstring> menuTags;  // the Tags submenu's items, in order, while it's open
-    std::vector<std::wstring> menuMics;      // device IDs in the Microphone submenu; "" is the default
-    std::vector<std::wstring> menuSpeakers;  // device IDs in the Playback submenu; "" is the default
     std::wstring notificationUrl;  // opened when the current notification is clicked
     POINT menuPoint{};
     ULONGLONG ignoreSelectUntil = 0;
@@ -279,21 +272,12 @@ void ToggleTag(size_t index) {
     }
 }
 
-// Saves the device picked in the Microphone or Playback submenu and, if
-// recording, switches to it straight away.
-void ChooseDevice(bool microphone, size_t index) {
-    const auto& ids = microphone ? app.menuMics : app.menuSpeakers;
-    if (index >= ids.size()) return;
-    bool saved = microphone ? Config::SaveMicrophone(ids[index]) : Config::SaveSpeakers(ids[index]);
-    if (!saved) {
-        Notify(L"Couldn't save the device", L"Couldn't write " + Config::Path() + L".", NIIF_WARNING);
-        return;
-    }
+// Opens Settings and applies what can change straight away: devices (even
+// mid-recording) and anything the uploader reads.
+void OpenSettings() {
+    if (!ShowSettingsDialog(app.instance, nullptr)) return;
     if (IsRecording()) app.recorder->SetDevices(ChosenDevices());
-}
-
-void OpenConnectionDialog() {
-    if (ShowConnectionDialog(app.instance, nullptr)) app.uploader->Wake();
+    app.uploader->Wake();
 }
 
 bool IsSetUp() {
@@ -336,43 +320,6 @@ HMENU BuildTagsMenu() {
     return tags;
 }
 
-// The Microphone or Playback submenu: the Windows default, then each
-// connected device. Fills app.menuMics or app.menuSpeakers and sets `label`
-// for the parent menu item.
-HMENU BuildDeviceMenu(bool microphone, const std::wstring& chosen, std::wstring& label) {
-    auto& ids = microphone ? app.menuMics : app.menuSpeakers;
-    UINT first = microphone ? kMicFirst : kSpeakersFirst;
-    UINT last = microphone ? kMicLast : kSpeakersLast;
-    ids = {L""};
-
-    HMENU menu = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING | (chosen.empty() ? MF_CHECKED : MF_UNCHECKED), first,
-                microphone ? L"Windows default (communications)" : L"Windows default");
-    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    std::wstring chosenName;
-    for (const auto& device : Recorder::ListDevices(microphone)) {
-        if (first + ids.size() > last) break;
-        bool ticked = device.id == chosen;
-        if (ticked) chosenName = device.name;
-        AppendMenuW(menu, MF_STRING | (ticked ? MF_CHECKED : MF_UNCHECKED), first + static_cast<UINT>(ids.size()),
-                    MenuLabel(device.name).c_str());
-        ids.push_back(device.id);
-    }
-    if (!chosen.empty() && chosenName.empty()) {
-        // Chosen but unplugged: recording uses the default until it's back.
-        chosenName = Recorder::DeviceName(chosen);
-        if (chosenName.empty()) chosenName = L"Chosen device";
-        chosenName += L" (not connected)";
-        AppendMenuW(menu, MF_STRING | MF_CHECKED | MF_GRAYED, 0, MenuLabel(chosenName).c_str());
-    }
-
-    label = (microphone ? L"Microphone: " : L"Playback: ") +
-            (chosen.empty() ? std::wstring(L"Windows default") : chosenName);
-    if (label.size() > 60) label = label.substr(0, 57) + L"...";
-    label = MenuLabel(label);
-    return menu;
-}
-
 void ShowMenu(POINT at) {
     HMENU menu = CreatePopupMenu();
     bool recording = IsRecording();
@@ -388,12 +335,6 @@ void ShowMenu(POINT at) {
     std::wstring tagsLabel = L"Tags: " + (app.tags.empty() ? std::wstring(L"none") : JoinTags(app.tags));
     if (tagsLabel.size() > 60) tagsLabel = tagsLabel.substr(0, 57) + L"...";
     AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(BuildTagsMenu()), tagsLabel.c_str());
-    DeviceChoice devices = ChosenDevices();
-    std::wstring deviceLabel;
-    HMENU mics = BuildDeviceMenu(true, devices.microphone, deviceLabel);
-    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(mics), deviceLabel.c_str());
-    HMENU speakers = BuildDeviceMenu(false, devices.speakers, deviceLabel);
-    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(speakers), deviceLabel.c_str());
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, UploadSummary().c_str());
     AppendMenuW(menu, MF_STRING, kUploadNow, L"Upload now");
@@ -401,10 +342,8 @@ void ShowMenu(POINT at) {
     AppendMenuW(menu, MF_STRING, kOpenSpeakr, L"Open Speakr");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, kOpenFolder, L"Open recordings folder");
-    AppendMenuW(menu, MF_STRING, kConnection, L"Speakr connection...");
     AppendMenuW(menu, MF_STRING, kSettings, L"Settings...");
-    AppendMenuW(menu, MF_STRING | (Autostart::IsEnabled() ? MF_CHECKED : MF_UNCHECKED), kAutostart,
-                L"Start at login");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, kExit, recording ? L"Stop, save and exit" : L"Exit");
     SetMenuDefaultItem(menu, kToggle, FALSE);
 
@@ -417,8 +356,6 @@ void ShowMenu(POINT at) {
 
 void RunCommand(UINT command) {
     if (command >= kTagFirst && command <= kTagLast) return ToggleTag(command - kTagFirst);
-    if (command >= kMicFirst && command <= kMicLast) return ChooseDevice(true, command - kMicFirst);
-    if (command >= kSpeakersFirst && command <= kSpeakersLast) return ChooseDevice(false, command - kSpeakersFirst);
     switch (command) {
         case kToggle: IsRecording() ? StopRecording() : StartRecording(); break;
         case kPause: TogglePause(); break;
@@ -428,25 +365,11 @@ void RunCommand(UINT command) {
         case kRetryRefused: RetryRefused(); break;
         case kOpenSpeakr: {
             std::wstring url = Config::Load().serverUrl;
-            url.empty() ? OpenConnectionDialog() : OpenUrl(url);
+            url.empty() ? OpenSettings() : OpenUrl(url);
             break;
         }
-        case kConnection: OpenConnectionDialog(); break;
-        case kSettings:
-            Config::Load();  // make sure the file exists
-            ShellExecuteW(nullptr, L"open", L"notepad.exe", Config::Path().c_str(), nullptr, SW_SHOWNORMAL);
-            break;
+        case kSettings: OpenSettings(); break;
         case kOpenFolder: OpenUrl(app.sessionsDir); break;
-        case kAutostart: {
-            bool enable = !Autostart::IsEnabled();
-            if (!Autostart::SetEnabled(enable)) {
-                Notify(L"Couldn't change Start at login", L"Windows refused the registry change.", NIIF_WARNING);
-            } else if (enable) {
-                Notify(L"Start at login: on", L"CallRecorder will start in the tray when you sign in.",
-                       NIIF_INFO | NIIF_NOSOUND);
-            }
-            break;
-        }
         case kExit: DestroyWindow(app.window); break;
     }
 }
@@ -494,7 +417,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             }
             if (wParam == kSetupTimer) {
                 KillTimer(window, kSetupTimer);
-                OpenConnectionDialog();
+                OpenSettings();
             }
             return 0;
         case Recorder::kWarningMessage: {
