@@ -15,13 +15,22 @@ does with your data.
   other server.
 - Recordings stay on your PC until they're uploaded to that server. Recordings
   marked **Sensitive** are never uploaded.
+- Nothing recorded before you set up a server, or for a different server, is
+  sent without asking you first.
 
 ## What the app accesses
 
 **Microphone and playback audio.** CallRecorder records your microphone and the
 audio your PC is playing (the other side of a call), but only between when you
 start a recording and when you stop it. The tray icon turns red (or purple in
-Sensitive mode) while it's recording.
+Sensitive mode) while it's recording. CallRecorder records your microphone even
+if you've muted yourself in a call app, because their mute doesn't reach it.
+Use Pause or Sensitive mode for anything private.
+
+If you list apps under **Only these apps** in Settings, CallRecorder records
+only the audio those apps play, which keeps other sounds on your PC (music,
+other calls, notifications) out of the recording. Your microphone is still
+recorded.
 
 **Your Speakr address and API token.** The address is saved in
 `%APPDATA%\CallRecorder\config.json`. The token is saved in Windows Credential
@@ -33,15 +42,31 @@ Each recording is saved in `%LOCALAPPDATA%\CallRecorder\sessions\` as an audio
 file (`.opus`) and a small `.json` file. The `.json` file holds the start time,
 title, tags, markers and upload status. After Speakr has finished processing a
 recording, its local audio is deleted once it's older than the number of days
-set in `keep_audio_days` (14 by default; 0 keeps it forever). Sensitive and
-failed recordings are never deleted automatically. Uninstalling the app leaves
-these files in place, so you can delete them yourself.
+set in `keep_audio_days` (14 by default; 0 keeps it forever). Sensitive, held,
+failed, stuck and missing recordings are never deleted automatically. You can
+delete any recording yourself from the Recordings window. Uninstalling the app
+leaves these files in place, so you can delete them yourself.
+
+If a crash leaves a recording without readable details, CallRecorder recovers
+it on the next start and keeps it on your PC only. It is uploaded only if you
+choose to upload it.
 
 ## What is sent, and where
 
-When a recording that isn't marked Sensitive ends, CallRecorder uploads it to
-the Speakr server you set up, over the connection you set up (use `https://`
-for encryption in transit). The upload includes:
+When a recording that isn't marked Sensitive ends, CallRecorder waits for a
+grace period (60 seconds by default, set by `upload_delay_seconds`) and then
+uploads it to the Speakr server you set up. During the grace period you can
+choose **Keep last recording on this PC** in the tray menu, and it is never
+uploaded.
+
+A recording is only sent to the server it was made for. If you made it before
+you set up a server, or for a different server address, CallRecorder holds it
+on your PC and asks before uploading it anywhere.
+
+The upload goes over the connection you set up. Use `https://` for encryption
+in transit: with plain `http://`, your recordings and API token cross the
+network unencrypted. Settings warns you about `http://` addresses that aren't
+on a private or local network. The upload includes:
 
 - the audio file
 - the recording's title and start time
