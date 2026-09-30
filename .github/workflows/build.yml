@@ -12,8 +12,10 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-      - name: Build
+      - name: Build and test
         shell: pwsh
+        # build.ps1 builds the app and CallRecorderTests, then runs ctest and
+        # fails on any test failure (-SkipTests would skip that).
         run: |
           $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
           .\build.ps1

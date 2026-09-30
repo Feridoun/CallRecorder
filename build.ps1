@@ -1,6 +1,10 @@
 # Builds CallRecorder with the MSVC toolchain, CMake, Ninja and vcpkg that ship
-# with Visual Studio 2022. Usage: .\build.ps1 [-Config release|debug]
-param([ValidateSet('release', 'debug')][string]$Config = 'release')
+# with Visual Studio 2022, then runs the unit tests (skip with -SkipTests).
+# Usage: .\build.ps1 [-Config release|debug] [-SkipTests]
+param(
+    [ValidateSet('release', 'debug')][string]$Config = 'release',
+    [switch]$SkipTests
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -20,6 +24,10 @@ try {
     cmake --build --preset $Config
     if ($LASTEXITCODE) { throw 'Build failed.' }
     Write-Host "Built: $PSScriptRoot\build\$Config\CallRecorder.exe"
+    if (-not $SkipTests) {
+        ctest --preset $Config
+        if ($LASTEXITCODE) { throw 'Tests failed.' }
+    }
 } finally {
     Pop-Location
 }
