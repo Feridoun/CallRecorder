@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.25)
 # x64-windows-static vcpkg triplet).
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-project(MeetingRecorder VERSION 1.3.0 LANGUAGES CXX RC)
+project(MeetingRecorder VERSION 1.3.1 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

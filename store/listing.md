@@ -20,7 +20,7 @@ GitHub Releases and runs it silently, so no MSIX packaging is needed.
 
 | Field | Value |
 |---|---|
-| Package URL | `https://github.com/Feridoun/MeetingRecorder/releases/download/v1.3.0/MeetingRecorder-Setup-1.3.0.exe` |
+| Package URL | `https://github.com/Feridoun/MeetingRecorder/releases/download/v1.3.1/MeetingRecorder-Setup-1.3.1.exe` |
 | Architecture | x64 |
 | Language | English (United States) |
 | App type | EXE |
@@ -129,7 +129,7 @@ If the name is taken, try `MeetingRecorder for Speakr` or `Speakr Meeting Record
 
 **Support contact:** https://github.com/Feridoun/MeetingRecorder/issues
 
-**Copyright:** © 2026 Fareedoon Ahmed
+**Copyright:** © 2026 Feridoun
 
 **Additional license terms:** MIT licence: https://github.com/Feridoun/MeetingRecorder/blob/main/LICENSE
 

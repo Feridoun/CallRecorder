@@ -10,7 +10,7 @@
 #define MyAppVersion "0.0.0"
 #endif
 #define MyAppName "MeetingRecorder"
-#define MyAppPublisher "Fareedoon Ahmed"
+#define MyAppPublisher "Feridoun"
 #define MyAppURL "https://github.com/Feridoun/MeetingRecorder"
 #define MyAppExeName "MeetingRecorder.exe"
 
