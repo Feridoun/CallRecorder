@@ -4,8 +4,10 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -50,7 +52,23 @@ public:
     std::vector<std::wstring> KnownTags();
 
 private:
+    // What one pass over the sessions found.
+    struct Cycle {
+        bool reachable = true;   // false once a global failure ends the pass
+        Status counts;
+        int newlyHeld = 0;       // sessions held during this pass
+        int fastPolling = 0;     // uploaded sessions worth checking every few seconds
+        std::optional<int64_t> nextDueSeconds;  // soonest end of a grace period
+    };
+
     void Run();
+    // One pass; returns how long to wait before the next.
+    DWORD RunCycle();
+    void ProcessSession(HttpClient* http, Session& session, const Config& config, Cycle& cycle);
+    // Looks in Speakr for a recording an interrupted upload may have created.
+    // Returns false on a global failure. id: the recording found, 0 if there is
+    // none, -1 if Speakr has no usable list to look in.
+    bool FindEarlierUpload(HttpClient& http, const Session& session, int& id);
     // Refreshes tagIds_ and the known tag list from Speakr. Callers decide
     // whether a failure matters; the start-of-cycle refresh ignores it.
     HttpResponse RefreshTags(HttpClient& http);
@@ -63,7 +81,9 @@ private:
     // True if the failure affects every request (network down, bad token,
     // server error) rather than just this session.
     bool IsGlobalFailure(const HttpResponse& response);
-    void Reject(Session& session, const std::wstring& reason);
+    // Refuses the upload. clearAttempt=false keeps the "may have reached
+    // Speakr" mark, for when it did.
+    void Reject(Session& session, const std::wstring& reason, bool clearAttempt = true);
     void Notify(Event event);
     void SetBlocker(std::wstring blocker);
 
