@@ -156,9 +156,8 @@ TEST(ReadFileText_StripsBomAndReportsMissing) {
     CHECK_EQ(GetLastError(), DWORD(ERROR_FILE_NOT_FOUND));
 }
 
-// KNOWN BUG (fails until fixed): ParseIsoUtc only range-checks day <= 31, so
-// impossible calendar dates such as 2026-02-31 are accepted and end up in a
-// SYSTEMTIME that SystemTimeToFileTime rejects.
+// Regression: impossible calendar dates such as 2026-02-31 are rejected rather
+// than ending up in a SYSTEMTIME that SystemTimeToFileTime refuses.
 TEST(IsoUtc_ParseRejectsImpossibleCalendarDates) {
     SYSTEMTIME t;
     CHECK(!ParseIsoUtc(L"2026-02-31T00:00:00Z", t));

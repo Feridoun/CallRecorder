@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <limits>
 #include <string>
 #include <type_traits>
 
@@ -19,9 +20,16 @@ T JsonGet(const Json& j, const char* key, T fallback) {
     if constexpr (std::is_same_v<T, bool>) {
         return v.is_boolean() ? v.template get<bool>() : fallback;
     } else if constexpr (std::is_integral_v<T>) {
-        if (v.is_number_integer()) return v.template get<T>();
-        if (v.is_number_float()) return static_cast<T>(v.template get<double>());
-        return fallback;
+        // Through double and clamped: out-of-range numbers (1e300, a 64-bit id
+        // read as int) saturate instead of wrapping or being undefined.
+        if (!v.is_number()) return fallback;
+        double d = v.template get<double>();
+        if (d != d) return fallback;  // NaN
+        constexpr double lo = static_cast<double>(std::numeric_limits<T>::min());
+        constexpr double hi = static_cast<double>(std::numeric_limits<T>::max());
+        if (d <= lo) return std::numeric_limits<T>::min();
+        if (d >= hi) return std::numeric_limits<T>::max();
+        return static_cast<T>(d);
     } else if constexpr (std::is_floating_point_v<T>) {
         return v.is_number() ? v.template get<T>() : fallback;
     } else if constexpr (std::is_same_v<T, std::string>) {

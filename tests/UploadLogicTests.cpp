@@ -25,9 +25,8 @@ TEST(SameServer_DifferentServersAndEmptyNeverMatch) {
     CHECK(!SameServer(L"https://a.example.com", L""));
 }
 
-// KNOWN BUG (fails until fixed): SameServer tests emptiness before
-// normalising, so two blank (whitespace-only) addresses compare equal even
-// though both normalise to "" and an empty address must never match.
+// Regression: emptiness is checked after normalising, so two blank
+// (whitespace-only) addresses don't compare equal.
 TEST(SameServer_WhitespaceOnlyAddressesNeverMatch) {
     CHECK(!SameServer(L"   ", L"   "));
     CHECK(!SameServer(L" ", L""));

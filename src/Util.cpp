@@ -48,7 +48,11 @@ bool ParseIsoUtc(const std::wstring& text, SYSTEMTIME& utc) {
     if (swscanf_s(text.c_str(), L"%4u-%2u-%2uT%2u:%2u:%2u", &year, &month, &day, &hour, &minute, &second) != 6) {
         return false;
     }
-    if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) {
+    // Days per month, with February's leap day checked below.
+    static const unsigned kDays[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    bool leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    if (year < 1601 || month < 1 || month > 12 || day < 1 || day > kDays[month - 1] ||
+        (month == 2 && day == 29 && !leap) || hour > 23 || minute > 59 || second > 59) {
         utc = {};  // hand-edited or damaged; callers treat a zero year as "unset"
         return false;
     }

@@ -21,9 +21,9 @@ inline constexpr double kStuckAfterSeconds = 24 * 60 * 60;
 // Same Speakr server? Compared after NormalizeServerUrl, ignoring case. An
 // empty address (recorded before Speakr was set up) is never the same.
 inline bool SameServer(const std::wstring& a, const std::wstring& b) {
-    if (a.empty() || b.empty()) return false;
     std::wstring x = NormalizeServerUrl(a);
     std::wstring y = NormalizeServerUrl(b);
+    if (x.empty() || y.empty()) return false;
     return CompareStringOrdinal(x.c_str(), static_cast<int>(x.size()), y.c_str(), static_cast<int>(y.size()),
                                 TRUE) == CSTR_EQUAL;
 }
