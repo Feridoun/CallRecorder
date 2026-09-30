@@ -11,11 +11,18 @@ struct Config {
     std::wstring hotwords;                        // comma-separated names/jargon to help transcription
     int keepAudioDays = 14;                       // delete local audio this long after Speakr is done; 0 = never
     bool sensitiveByDefault = false;              // start each app launch in local-only mode
+    std::wstring microphone;                      // Windows device ID; empty = default communications mic
+    std::wstring speakers;                        // Windows device ID; empty = default playback device
 
     static std::wstring Path();
     static Config Load();  // writes the defaults file if it doesn't exist
-    // Changes server_url in the file, leaving the other settings as they are.
-    static bool SaveServerUrl(const std::wstring& url);
+    // Change one setting in the file, leaving the others as they are.
+    static bool SaveServerUrl(const std::wstring& url) { return SaveString("server_url", url); }
+    static bool SaveMicrophone(const std::wstring& id) { return SaveString("microphone", id); }
+    static bool SaveSpeakers(const std::wstring& id) { return SaveString("speakers", id); }
+
+private:
+    static bool SaveString(const char* key, const std::wstring& value);
 };
 
 // Tidies a pasted Speakr address: adds https:// if there's no scheme and

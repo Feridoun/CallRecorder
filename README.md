@@ -56,8 +56,8 @@ A grey dot appears in the tray.
 | Pause / resume (paused time is left out) | `Ctrl+Alt+P` | menu |
 | Add a marker | `Ctrl+Alt+K` | menu |
 
-Click the icon for the menu, which also has **Sensitive**, **Tags**, upload
-status, **Upload now**, **Open Speakr**, the recordings folder, settings and
+Click the icon for the menu, which also has **Sensitive**, **Tags**,
+**Microphone** and **Playback** device pickers, upload status, **Upload now**, **Open Speakr**, the recordings folder, settings and
 **Start at login**.
 
 Tray icon colours: **grey** idle, **red** recording, **purple** recording in
@@ -75,6 +75,15 @@ recording in progress and to the ones after it, until you change them. Each
 launch starts with the tags in `config.json` ticked (`Call` by default). A tag
 listed in `config.json` that doesn't exist in Speakr yet is created on the
 first upload.
+
+### Audio devices
+
+By default CallRecorder records Windows' default communications microphone and
+default playback device, and follows them when they change. To record a
+specific device instead, pick it under **Microphone** or **Playback** in the
+tray menu. The choice is saved and takes effect straight away, even
+mid-recording. If the chosen device isn't connected, CallRecorder uses the
+Windows default and switches back when the device returns.
 
 ### Sensitive recordings
 
@@ -103,7 +112,9 @@ apply within 10 minutes, or straight away after **Upload now**.
   "tags": ["Call"],
   "hotwords": "",
   "keep_audio_days": 14,
-  "sensitive_by_default": false
+  "sensitive_by_default": false,
+  "microphone": "",
+  "speakers": ""
 }
 ```
 
@@ -114,6 +125,7 @@ apply within 10 minutes, or straight away after **Upload now**.
 | `hotwords` | Comma-separated names and jargon to help transcription, e.g. `"Anika, Kubernetes, SLA"` |
 | `keep_audio_days` | Delete local audio this many days after Speakr has finished with it (0 = keep forever). Local-only and failed recordings are never deleted |
 | `sensitive_by_default` | Start every launch in local-only mode |
+| `microphone`, `speakers` | Windows device IDs to record; empty follows the Windows default. Set them from the tray menu |
 
 ## Where recordings go
 
@@ -137,9 +149,9 @@ Uninstalling leaves your recordings and settings in place.
 
 ## Good to know
 
-- The microphone is Windows' **default communications device**, which Teams
-  and Zoom normally use too. If you plug in a headset or connect Bluetooth
-  mid-call, recording moves to the new device.
+- Unless you pick one, the microphone is Windows' **default communications
+  device**, which Teams and Zoom normally use too. If you plug in a headset or
+  connect Bluetooth mid-call, recording moves to the new device.
 - Without a headset, your microphone also picks up the other side from your
   speakers, so their voices appear twice, slightly offset. Use a headset for
   clean transcripts.
@@ -172,7 +184,7 @@ To build the installer and portable zip as well (needs
 | File | Role |
 |---|---|
 | `src/main.cpp` | Tray icon, menu, hotkeys, tags, session lifecycle |
-| `src/Recorder.*` | WASAPI microphone + loopback capture, mixing, device changes |
+| `src/Recorder.*` | WASAPI microphone + loopback capture, mixing, device selection and changes |
 | `src/OpusFileWriter.*` | Crash-tolerant Ogg Opus output |
 | `src/Session.*` | The `.json` file for each recording, and crash recovery |
 | `src/Uploader.*` | Background upload queue, Speakr status polling, tag lookup, audio retention |

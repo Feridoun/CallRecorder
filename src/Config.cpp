@@ -39,6 +39,8 @@ Config Config::Load() {
             {"hotwords", ""},
             {"keep_audio_days", config.keepAudioDays},
             {"sensitive_by_default", config.sensitiveByDefault},
+            {"microphone", ""},
+            {"speakers", ""},
         };
         std::ofstream(path, std::ios::binary) << defaults.dump(2) << "\n";
         return config;
@@ -57,10 +59,12 @@ Config Config::Load() {
     config.hotwords = FromUtf8(j.value("hotwords", ""));
     config.keepAudioDays = j.value("keep_audio_days", config.keepAudioDays);
     config.sensitiveByDefault = j.value("sensitive_by_default", config.sensitiveByDefault);
+    config.microphone = FromUtf8(j.value("microphone", ""));
+    config.speakers = FromUtf8(j.value("speakers", ""));
     return config;
 }
 
-bool Config::SaveServerUrl(const std::wstring& url) {
+bool Config::SaveString(const char* key, const std::wstring& value) {
     Load();  // make sure the file exists
     std::wstring path = Path();
     if (path.empty()) return false;
@@ -71,7 +75,7 @@ bool Config::SaveServerUrl(const std::wstring& url) {
         j = nlohmann::ordered_json::parse(in, nullptr, /*allow_exceptions=*/false);
     }
     if (j.is_discarded() || !j.is_object()) j = nlohmann::ordered_json::object();
-    j["server_url"] = ToUtf8(url);
+    j[key] = ToUtf8(value);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     return static_cast<bool>(out << j.dump(2) << "\n");
 }

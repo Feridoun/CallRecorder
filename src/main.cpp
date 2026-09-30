@@ -37,6 +37,10 @@ enum Command : UINT {
     kAutostart, kConnection,
     kTagFirst = 1000,  // kTagFirst + i toggles App::menuTags[i]
     kTagLast = 1999,
+    kMicFirst = 2000,  // kMicFirst + i records from App::menuMics[i]
+    kMicLast = 2099,
+    kSpeakersFirst = 2100,  // kSpeakersFirst + i records App::menuSpeakers[i]
+    kSpeakersLast = 2199,
 };
 
 struct Hotkey {
@@ -67,6 +71,8 @@ struct App {
     bool sensitive = false;  // applies to the current session and the next one
     std::vector<std::wstring> tags;      // Speakr tags for the current session and the next one
     std::vector<std::wstring> menuTags;  // the Tags submenu's items, in order, while it's open
+    std::vector<std::wstring> menuMics;      // device IDs in the Microphone submenu; "" is the default
+    std::vector<std::wstring> menuSpeakers;  // device IDs in the Playback submenu; "" is the default
     std::wstring notificationUrl;  // opened when the current notification is clicked
     POINT menuPoint{};
     ULONGLONG ignoreSelectUntil = 0;
@@ -177,10 +183,15 @@ std::wstring JoinTags(const std::vector<std::wstring>& tags) {
     return joined;
 }
 
+DeviceChoice ChosenDevices() {
+    Config config = Config::Load();
+    return {config.microphone, config.speakers};
+}
+
 void StartRecording() {
     Session session = Session::Create(app.sessionsDir, app.sensitive, app.tags);
     std::wstring error;
-    if (!app.recorder->Start(session.audioPath, session.title, error)) {
+    if (!app.recorder->Start(session.audioPath, session.title, ChosenDevices(), error)) {
         Notify(L"Couldn't start recording", error, NIIF_ERROR);
         return;
     }
@@ -268,12 +279,32 @@ void ToggleTag(size_t index) {
     }
 }
 
+// Saves the device picked in the Microphone or Playback submenu and, if
+// recording, switches to it straight away.
+void ChooseDevice(bool microphone, size_t index) {
+    const auto& ids = microphone ? app.menuMics : app.menuSpeakers;
+    if (index >= ids.size()) return;
+    bool saved = microphone ? Config::SaveMicrophone(ids[index]) : Config::SaveSpeakers(ids[index]);
+    if (!saved) {
+        Notify(L"Couldn't save the device", L"Couldn't write " + Config::Path() + L".", NIIF_WARNING);
+        return;
+    }
+    if (IsRecording()) app.recorder->SetDevices(ChosenDevices());
+}
+
 void OpenConnectionDialog() {
     if (ShowConnectionDialog(app.instance, nullptr)) app.uploader->Wake();
 }
 
 bool IsSetUp() {
     return !Config::Load().serverUrl.empty() && !ReadSpeakrToken().empty();
+}
+
+std::wstring MenuLabel(const std::wstring& text) {
+    // A single & would be read as a keyboard accelerator.
+    std::wstring label;
+    for (wchar_t c : text) label += c == L'&' ? L"&&" : std::wstring(1, c);
+    return label;
 }
 
 // Speakr's tags plus any ticked ones it doesn't have yet (they're created on
@@ -299,13 +330,47 @@ HMENU BuildTagsMenu() {
     }
     for (size_t i = 0; i < app.menuTags.size(); ++i) {
         bool ticked = std::find(app.tags.begin(), app.tags.end(), app.menuTags[i]) != app.tags.end();
-        // A single & would be read as a keyboard accelerator.
-        std::wstring label;
-        for (wchar_t c : app.menuTags[i]) label += c == L'&' ? L"&&" : std::wstring(1, c);
         AppendMenuW(tags, MF_STRING | (ticked ? MF_CHECKED : MF_UNCHECKED), kTagFirst + static_cast<UINT>(i),
-                    label.c_str());
+                    MenuLabel(app.menuTags[i]).c_str());
     }
     return tags;
+}
+
+// The Microphone or Playback submenu: the Windows default, then each
+// connected device. Fills app.menuMics or app.menuSpeakers and sets `label`
+// for the parent menu item.
+HMENU BuildDeviceMenu(bool microphone, const std::wstring& chosen, std::wstring& label) {
+    auto& ids = microphone ? app.menuMics : app.menuSpeakers;
+    UINT first = microphone ? kMicFirst : kSpeakersFirst;
+    UINT last = microphone ? kMicLast : kSpeakersLast;
+    ids = {L""};
+
+    HMENU menu = CreatePopupMenu();
+    AppendMenuW(menu, MF_STRING | (chosen.empty() ? MF_CHECKED : MF_UNCHECKED), first,
+                microphone ? L"Windows default (communications)" : L"Windows default");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    std::wstring chosenName;
+    for (const auto& device : Recorder::ListDevices(microphone)) {
+        if (first + ids.size() > last) break;
+        bool ticked = device.id == chosen;
+        if (ticked) chosenName = device.name;
+        AppendMenuW(menu, MF_STRING | (ticked ? MF_CHECKED : MF_UNCHECKED), first + static_cast<UINT>(ids.size()),
+                    MenuLabel(device.name).c_str());
+        ids.push_back(device.id);
+    }
+    if (!chosen.empty() && chosenName.empty()) {
+        // Chosen but unplugged: recording uses the default until it's back.
+        chosenName = Recorder::DeviceName(chosen);
+        if (chosenName.empty()) chosenName = L"Chosen device";
+        chosenName += L" (not connected)";
+        AppendMenuW(menu, MF_STRING | MF_CHECKED | MF_GRAYED, 0, MenuLabel(chosenName).c_str());
+    }
+
+    label = (microphone ? L"Microphone: " : L"Playback: ") +
+            (chosen.empty() ? std::wstring(L"Windows default") : chosenName);
+    if (label.size() > 60) label = label.substr(0, 57) + L"...";
+    label = MenuLabel(label);
+    return menu;
 }
 
 void ShowMenu(POINT at) {
@@ -323,6 +388,12 @@ void ShowMenu(POINT at) {
     std::wstring tagsLabel = L"Tags: " + (app.tags.empty() ? std::wstring(L"none") : JoinTags(app.tags));
     if (tagsLabel.size() > 60) tagsLabel = tagsLabel.substr(0, 57) + L"...";
     AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(BuildTagsMenu()), tagsLabel.c_str());
+    DeviceChoice devices = ChosenDevices();
+    std::wstring deviceLabel;
+    HMENU mics = BuildDeviceMenu(true, devices.microphone, deviceLabel);
+    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(mics), deviceLabel.c_str());
+    HMENU speakers = BuildDeviceMenu(false, devices.speakers, deviceLabel);
+    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(speakers), deviceLabel.c_str());
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, UploadSummary().c_str());
     AppendMenuW(menu, MF_STRING, kUploadNow, L"Upload now");
@@ -346,6 +417,8 @@ void ShowMenu(POINT at) {
 
 void RunCommand(UINT command) {
     if (command >= kTagFirst && command <= kTagLast) return ToggleTag(command - kTagFirst);
+    if (command >= kMicFirst && command <= kMicLast) return ChooseDevice(true, command - kMicFirst);
+    if (command >= kSpeakersFirst && command <= kSpeakersLast) return ChooseDevice(false, command - kSpeakersFirst);
     switch (command) {
         case kToggle: IsRecording() ? StopRecording() : StartRecording(); break;
         case kPause: TogglePause(); break;

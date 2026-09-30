@@ -4,9 +4,13 @@
 
 #include <audioclient.h>
 #include <mmdeviceapi.h>
+// After mmdeviceapi.h, which defines DEFINE_PROPERTYKEY.
+#include <functiondiscoverykeys_devpkey.h>
 #include <wrl/client.h>
 
 #include <algorithm>
+#include <array>
+#include <utility>
 #include <vector>
 
 using Microsoft::WRL::ComPtr;
@@ -21,11 +25,13 @@ constexpr int64_t kMaxCatchUp = kRate * 2;  // larger gaps (sleep/hibernate) are
 constexpr REFERENCE_TIME kBufferDuration = 10'000'000;  // 1 s WASAPI buffer
 constexpr ULONGLONG kRetryIntervalMs = 2000;
 
-// Sets a flag whenever the default audio devices change (headset plugged in,
-// Bluetooth connects, ...), so capture can move to the new device.
+// Sets flags when the default audio devices change (headset plugged in,
+// Bluetooth connects, ...), so capture can move to the new device, and when a
+// device becomes available, so capture can return to the one the user chose.
 class DeviceWatcher final : public IMMNotificationClient {
 public:
-    explicit DeviceWatcher(std::atomic<bool>* changed) : changed_(changed) {}
+    DeviceWatcher(std::atomic<bool>* defaultChanged, std::atomic<bool>* deviceArrived)
+        : defaultChanged_(defaultChanged), deviceArrived_(deviceArrived) {}
 
     ULONG STDMETHODCALLTYPE AddRef() override { return InterlockedIncrement(&refs_); }
     ULONG STDMETHODCALLTYPE Release() override {
@@ -44,18 +50,38 @@ public:
     }
 
     HRESULT STDMETHODCALLTYPE OnDefaultDeviceChanged(EDataFlow, ERole, LPCWSTR) override {
-        *changed_ = true;
+        *defaultChanged_ = true;
         return S_OK;
     }
-    HRESULT STDMETHODCALLTYPE OnDeviceStateChanged(LPCWSTR, DWORD) override { return S_OK; }
-    HRESULT STDMETHODCALLTYPE OnDeviceAdded(LPCWSTR) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE OnDeviceStateChanged(LPCWSTR, DWORD state) override {
+        if (state == DEVICE_STATE_ACTIVE) *deviceArrived_ = true;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE OnDeviceAdded(LPCWSTR) override {
+        *deviceArrived_ = true;
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE OnDeviceRemoved(LPCWSTR) override { return S_OK; }
     HRESULT STDMETHODCALLTYPE OnPropertyValueChanged(LPCWSTR, const PROPERTYKEY) override { return S_OK; }
 
 private:
     LONG refs_ = 1;
-    std::atomic<bool>* changed_;
+    std::atomic<bool>* defaultChanged_;
+    std::atomic<bool>* deviceArrived_;
 };
+
+std::wstring FriendlyName(IMMDevice* device) {
+    ComPtr<IPropertyStore> properties;
+    if (FAILED(device->OpenPropertyStore(STGM_READ, &properties))) return {};
+    PROPVARIANT value;
+    PropVariantInit(&value);
+    std::wstring name;
+    if (SUCCEEDED(properties->GetValue(PKEY_Device_FriendlyName, &value)) && value.vt == VT_LPWSTR) {
+        name = value.pwszVal;
+    }
+    PropVariantClear(&value);
+    return name;
+}
 
 // One WASAPI capture stream, converted by Windows to 48 kHz mono float, plus
 // the samples captured but not yet mixed.
@@ -68,10 +94,38 @@ public:
     const wchar_t* Name() const { return name_; }
     bool IsOpen() const { return capture_ != nullptr; }
 
+    // An empty ID follows the Windows default. Takes effect on the next Open().
+    // Returns whether the choice changed.
+    bool Choose(const std::wstring& id) { return std::exchange(chosenId_, id) != id; }
+    // A device was chosen but isn't the one open (or nothing is open).
+    bool FellBack() const { return !chosenId_.empty() && openedId_ != chosenId_; }
+    bool FollowsDefault() const { return chosenId_.empty() || FellBack(); }
+
+    // Opens the chosen device, or the default one if it isn't available.
     bool Open(IMMDeviceEnumerator* enumerator) {
         Close();
         ComPtr<IMMDevice> device;
+        DWORD state = 0;
+        if (!chosenId_.empty() && SUCCEEDED(enumerator->GetDevice(chosenId_.c_str(), &device)) &&
+            SUCCEEDED(device->GetState(&state)) && state == DEVICE_STATE_ACTIVE && OpenDevice(device.Get())) {
+            return true;
+        }
+        device.Reset();
         if (FAILED(enumerator->GetDefaultAudioEndpoint(flow_, role_, &device))) return false;
+        return OpenDevice(device.Get());
+    }
+
+    void Close() {
+        if (client_) client_->Stop();
+        capture_.Reset();
+        client_.Reset();
+        openedId_.clear();
+        pending_.clear();
+        primed_ = false;
+    }
+
+private:
+    bool OpenDevice(IMMDevice* device) {
         if (FAILED(device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &client_))) return false;
 
         WAVEFORMATEX format{};
@@ -92,16 +146,13 @@ public:
             return false;
         }
         capture_ = capture;
+        LPWSTR id = nullptr;
+        if (SUCCEEDED(device->GetId(&id))) openedId_ = id;
+        CoTaskMemFree(id);
         return true;
     }
 
-    void Close() {
-        if (client_) client_->Stop();
-        capture_.Reset();
-        client_.Reset();
-        pending_.clear();
-        primed_ = false;
-    }
+public:
 
     // Moves everything WASAPI has captured into pending_. Returns false if the
     // device has gone away (unplugged, disabled), after closing the stream.
@@ -158,6 +209,8 @@ private:
     EDataFlow flow_;
     ERole role_;
     bool loopback_;
+    std::wstring chosenId_;
+    std::wstring openedId_;
     ComPtr<IAudioClient> client_;
     ComPtr<IAudioCaptureClient> capture_;
     std::vector<float> pending_;
@@ -165,6 +218,42 @@ private:
 };
 
 }  // namespace
+
+std::vector<AudioDevice> Recorder::ListDevices(bool microphones) {
+    std::vector<AudioDevice> devices;
+    ComPtr<IMMDeviceEnumerator> enumerator;
+    ComPtr<IMMDeviceCollection> collection;
+    UINT count = 0;
+    if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator))) ||
+        FAILED(enumerator->EnumAudioEndpoints(microphones ? eCapture : eRender, DEVICE_STATE_ACTIVE, &collection)) ||
+        FAILED(collection->GetCount(&count))) {
+        return devices;
+    }
+    for (UINT i = 0; i < count; ++i) {
+        ComPtr<IMMDevice> device;
+        LPWSTR id = nullptr;
+        if (FAILED(collection->Item(i, &device)) || FAILED(device->GetId(&id))) continue;
+        AudioDevice entry{id, FriendlyName(device.Get())};
+        CoTaskMemFree(id);
+        if (entry.name.empty()) entry.name = microphones ? L"Unnamed microphone" : L"Unnamed playback device";
+        devices.push_back(std::move(entry));
+    }
+    std::sort(devices.begin(), devices.end(), [](const AudioDevice& a, const AudioDevice& b) {
+        return CompareStringOrdinal(a.name.c_str(), -1, b.name.c_str(), -1, TRUE) == CSTR_LESS_THAN;
+    });
+    return devices;
+}
+
+std::wstring Recorder::DeviceName(const std::wstring& id) {
+    ComPtr<IMMDeviceEnumerator> enumerator;
+    ComPtr<IMMDevice> device;
+    if (id.empty() ||
+        FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator))) ||
+        FAILED(enumerator->GetDevice(id.c_str(), &device))) {
+        return {};
+    }
+    return FriendlyName(device.Get());
+}
 
 Recorder::Recorder(HWND notifyWindow)
     : notifyWindow_(notifyWindow), stopEvent_(CreateEventW(nullptr, TRUE, FALSE, nullptr)) {}
@@ -174,11 +263,13 @@ Recorder::~Recorder() {
     CloseHandle(stopEvent_);
 }
 
-bool Recorder::Start(const std::wstring& audioPath, const std::wstring& title, std::wstring& error) {
+bool Recorder::Start(const std::wstring& audioPath, const std::wstring& title, const DeviceChoice& devices,
+                     std::wstring& error) {
     if (IsRunning()) {
         error = L"Already recording.";
         return false;
     }
+    SetDevices(devices);
     ResetEvent(stopEvent_);
     paused_ = false;
     recordedSamples_ = 0;
@@ -201,6 +292,12 @@ void Recorder::Stop() {
     if (!IsRunning()) return;
     SetEvent(stopEvent_);
     thread_.join();
+}
+
+void Recorder::SetDevices(const DeviceChoice& devices) {
+    std::lock_guard lock(devicesMutex_);
+    devices_ = devices;
+    devicesChosen_ = true;
 }
 
 double Recorder::RecordedSeconds() const {
@@ -226,8 +323,9 @@ void Recorder::Run(std::wstring audioPath, std::wstring title, HANDLE ready, std
     ComPtr<IMMDeviceEnumerator> enumerator;
     CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator));
 
-    std::atomic<bool> devicesChanged{false};
-    auto* watcher = new DeviceWatcher(&devicesChanged);
+    std::atomic<bool> defaultChanged{false};
+    std::atomic<bool> deviceArrived{false};
+    auto* watcher = new DeviceWatcher(&defaultChanged, &deviceArrived);
     if (enumerator) enumerator->RegisterEndpointNotificationCallback(watcher);
 
     // The communications role is what Teams, Zoom and softphones use, so the
@@ -235,6 +333,25 @@ void Recorder::Run(std::wstring audioPath, std::wstring title, HANDLE ready, std
     CaptureSource mic(L"microphone", eCapture, eCommunications, false);
     CaptureSource system(L"system audio", eRender, eConsole, true);
     CaptureSource* sources[] = {&mic, &system};
+    // Returns whether each source's choice changed.
+    auto takeChoice = [&] {
+        std::lock_guard lock(devicesMutex_);
+        devicesChosen_ = false;
+        return std::array{mic.Choose(devices_.microphone), system.Choose(devices_.speakers)};
+    };
+    takeChoice();
+    // Says once each time a chosen device is unavailable and the default is used.
+    bool warnedFallback[std::size(sources)] = {};
+    auto warnFallback = [&] {
+        for (size_t i = 0; i < std::size(sources); ++i) {
+            bool fellBack = sources[i]->IsOpen() && sources[i]->FellBack();
+            if (fellBack && !warnedFallback[i]) {
+                Warn(std::wstring(L"The chosen ") + (sources[i] == &mic ? L"microphone" : L"playback device") +
+                     L" isn't available. Using the Windows default until it is.");
+            }
+            warnedFallback[i] = fellBack;
+        }
+    };
 
     OpusFileWriter writer;
     bool ok = false;
@@ -254,6 +371,7 @@ void Recorder::Run(std::wstring audioPath, std::wstring title, HANDLE ready, std
     if (ok) {
         if (!mic.IsOpen()) Warn(L"No microphone found. Recording system audio only.");
         if (!system.IsOpen()) Warn(L"Couldn't capture system audio. Recording microphone only.");
+        warnFallback();
 
         LARGE_INTEGER frequency, start;
         QueryPerformanceFrequency(&frequency);
@@ -266,8 +384,23 @@ void Recorder::Run(std::wstring audioPath, std::wstring title, HANDLE ready, std
         for (bool stopping = false; !stopping;) {
             stopping = WaitForSingleObject(stopEvent_, 10) != WAIT_TIMEOUT;
 
-            if (devicesChanged.exchange(false)) {
-                for (auto* source : sources) source->Open(enumerator.Get());
+            bool newDefault = defaultChanged.exchange(false);
+            bool arrived = deviceArrived.exchange(false);
+            if (devicesChosen_) {
+                auto changed = takeChoice();
+                for (size_t i = 0; i < std::size(sources); ++i) {
+                    if (changed[i]) sources[i]->Open(enumerator.Get());
+                }
+                warnFallback();
+            } else if (newDefault || arrived) {
+                // A new default matters to sources following it; a device
+                // arriving may be the chosen one coming back.
+                for (auto* source : sources) {
+                    if ((newDefault && source->FollowsDefault()) || (arrived && source->FellBack())) {
+                        source->Open(enumerator.Get());
+                    }
+                }
+                warnFallback();
             } else if ((!mic.IsOpen() || !system.IsOpen()) && GetTickCount64() - lastRetry > kRetryIntervalMs) {
                 lastRetry = GetTickCount64();
                 for (auto* source : sources) {
