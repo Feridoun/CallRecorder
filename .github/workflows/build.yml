@@ -1,0 +1,23 @@
+# Checks that every push and pull request builds. Releases are built and
+# signed locally with tools\release.ps1 (the signing key is in a cloud HSM
+# that CI can't reach), so nothing here is published.
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        shell: pwsh
+        run: |
+          $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
+          .\build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CallRecorder-unsigned
+          path: build/release/CallRecorder.exe
