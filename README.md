@@ -338,6 +338,10 @@ The output is `build\release\CallRecorder.exe`. Dependencies (`opus`,
 `libopusenc`, `nlohmann-json`) come from vcpkg in manifest mode and are linked
 statically.
 
+`build.ps1` also builds and runs the unit tests (`tests/`, the non-UI logic:
+settings, recording files, upload decisions). Add `-SkipTests` to skip them,
+or run `buildelease\CallRecorderTests.exe` directly.
+
 To build the installer and portable zip as well (needs
 [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
 
@@ -359,6 +363,7 @@ To build the installer and portable zip as well (needs
 | `src/HttpClient.*` | WinHTTP client (streams uploads from disk) |
 | `src/Config.*` | `config.json` and the Credential Manager token |
 | `src/Json.h` | Type-checked JSON reads that never throw |
+| `tests/` | Unit tests (run by `build.ps1` and CI) |
 | `installer/CallRecorder.iss` | Inno Setup script |
 
 ## Roadmap ideas
