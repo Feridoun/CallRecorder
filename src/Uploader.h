@@ -32,7 +32,8 @@ public:
     struct Status {
         int waiting = 0;     // not uploaded yet
         int processing = 0;  // in Speakr, not finished
-        int problems = 0;    // rejected or failed
+        int problems = 0;    // rejected, failed, missing in Speakr or stuck
+        int held = 0;        // made for another (or no) Speakr server; waiting for the user to adopt them
         std::wstring blocker;  // why uploads are stalled, if they are
     };
 

@@ -264,7 +264,7 @@ Recorder::~Recorder() {
 }
 
 bool Recorder::Start(const std::wstring& audioPath, const std::wstring& title, const DeviceChoice& devices,
-                     std::wstring& error) {
+                     bool /*separateChannels*/, std::wstring& error) {
     if (IsRunning()) {
         error = L"Already recording.";
         return false;
@@ -304,15 +304,15 @@ double Recorder::RecordedSeconds() const {
     return static_cast<double>(recordedSamples_) / kRate;
 }
 
-std::wstring Recorder::TakeWarning() {
+std::vector<std::wstring> Recorder::TakeWarnings() {
     std::lock_guard lock(warningMutex_);
-    return std::exchange(warning_, {});
+    return std::exchange(warnings_, {});
 }
 
 void Recorder::Warn(std::wstring message) {
     {
         std::lock_guard lock(warningMutex_);
-        warning_ = std::move(message);
+        warnings_.push_back(std::move(message));
     }
     PostMessageW(notifyWindow_, kWarningMessage, 0, 0);
 }

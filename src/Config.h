@@ -13,6 +13,13 @@ struct Config {
     bool sensitiveByDefault = false;              // start each app launch in local-only mode
     std::wstring microphone;                      // Windows device ID; empty = default communications mic
     std::wstring speakers;                        // Windows device ID; empty = default playback device
+    int uploadDelaySeconds = 60;                  // wait this long after stopping before uploading (0 = at once)
+    bool separateChannels = false;                // stereo: microphone on the left, everyone else on the right
+    std::vector<std::wstring> loopbackApps;       // record only audio these apps play (e.g. Teams.exe); empty = all
+    // Not a setting: true when config.json exists but couldn't be read, in
+    // which case the fields above are defaults and the app fails closed
+    // (starts in local-only mode). Never saved.
+    bool unreadable = false;
 
     static std::wstring Path();
     static Config Load();  // writes the defaults file if it doesn't exist

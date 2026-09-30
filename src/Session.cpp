@@ -36,8 +36,10 @@ double Round1(double value) {
 
 }  // namespace
 
-Session Session::Create(const std::wstring& directory, bool sensitive, std::vector<std::wstring> tags) {
+Session Session::Create(const std::wstring& directory, bool sensitive, std::vector<std::wstring> tags,
+                        const std::wstring& serverUrl) {
     Session session;
+    session.serverUrl = serverUrl;
     session.tags = std::move(tags);
     GetSystemTime(&session.startedUtc);
     session.id = FormatFileStamp(session.startedUtc);
@@ -125,6 +127,11 @@ bool Session::Save() const {
     if (!finishedUtc.empty()) j["finished_utc"] = ToUtf8(finishedUtc);
     if (audioDeleted) j["audio_deleted"] = true;
     return WriteFileAtomically(metaPath, j.dump(2) + "\n");
+}
+
+std::mutex& Session::FileMutex() {
+    static std::mutex mutex;
+    return mutex;
 }
 
 void Session::Discard() const {

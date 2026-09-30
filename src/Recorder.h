@@ -19,6 +19,11 @@ struct AudioDevice {
 struct DeviceChoice {
     std::wstring microphone;
     std::wstring speakers;
+    // Record only the audio these executables play (file names such as
+    // L"Teams.exe", case-insensitive, including their child processes)
+    // instead of everything the playback device plays. Empty records all
+    // system audio.
+    std::vector<std::wstring> loopbackApps;
 };
 
 // Records "both sides of a call": a microphone (you) mixed with a loopback
@@ -40,8 +45,10 @@ public:
     Recorder(const Recorder&) = delete;
     Recorder& operator=(const Recorder&) = delete;
 
+    // separateChannels: write stereo, microphone left and system audio right,
+    // instead of one mixed mono channel.
     bool Start(const std::wstring& audioPath, const std::wstring& title, const DeviceChoice& devices,
-               std::wstring& error);
+               bool separateChannels, std::wstring& error);
     void Stop();  // Blocks until the file is finalised.
     // Switches devices; takes effect within 10 ms if recording.
     void SetDevices(const DeviceChoice& devices);
@@ -51,7 +58,8 @@ public:
     bool IsPaused() const { return paused_; }
     double RecordedSeconds() const;
 
-    std::wstring TakeWarning();
+    // Warnings since the last call, oldest first.
+    std::vector<std::wstring> TakeWarnings();
 
 private:
     void Run(std::wstring audioPath, std::wstring title, HANDLE ready, std::wstring* startError);
@@ -68,5 +76,5 @@ private:
     std::atomic<bool> devicesChosen_{false};  // devices_ changed since the thread last read it
 
     std::mutex warningMutex_;
-    std::wstring warning_;
+    std::vector<std::wstring> warnings_;
 };

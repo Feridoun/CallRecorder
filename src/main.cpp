@@ -178,13 +178,14 @@ std::wstring JoinTags(const std::vector<std::wstring>& tags) {
 
 DeviceChoice ChosenDevices() {
     Config config = Config::Load();
-    return {config.microphone, config.speakers};
+    return {config.microphone, config.speakers, config.loopbackApps};
 }
 
 void StartRecording() {
-    Session session = Session::Create(app.sessionsDir, app.sensitive, app.tags);
+    Config config = Config::Load();
+    Session session = Session::Create(app.sessionsDir, app.sensitive, app.tags, config.serverUrl);
     std::wstring error;
-    if (!app.recorder->Start(session.audioPath, session.title, ChosenDevices(), error)) {
+    if (!app.recorder->Start(session.audioPath, session.title, ChosenDevices(), config.separateChannels, error)) {
         Notify(L"Couldn't start recording", error, NIIF_ERROR);
         return;
     }
@@ -421,8 +422,8 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             }
             return 0;
         case Recorder::kWarningMessage: {
-            std::wstring warning = app.recorder->TakeWarning();
-            if (!warning.empty()) Notify(kAppName, warning, NIIF_WARNING);
+            // Windows shows one notification at a time; the latest wins.
+            for (const auto& warning : app.recorder->TakeWarnings()) Notify(kAppName, warning, NIIF_WARNING);
             return 0;
         }
         case Uploader::kMessage:
