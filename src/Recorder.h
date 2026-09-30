@@ -54,7 +54,9 @@ public:
     void SetDevices(const DeviceChoice& devices);
 
     bool IsRunning() const { return thread_.joinable(); }
-    void SetPaused(bool paused) { paused_ = paused; }
+    // IsPaused() reports the request at once; the recording is cut at the exact
+    // sample the request was made (see pauseEdges_).
+    void SetPaused(bool paused);
     bool IsPaused() const { return paused_; }
     double RecordedSeconds() const;
 
@@ -65,11 +67,25 @@ private:
     void Run(std::wstring audioPath, std::wstring title, HANDLE ready, std::wstring* startError);
     void Warn(std::wstring message);
 
+    // The paused state changes at this position of the recording timeline
+    // (samples since Run started its clock; the sample at position p was
+    // captured at about real time p).
+    struct PauseEdge {
+        int64_t position;
+        bool paused;
+    };
+
     HWND notifyWindow_;
     HANDLE stopEvent_;
     std::thread thread_;
     std::atomic<bool> paused_{false};
     std::atomic<int64_t> recordedSamples_{0};
+    bool separateChannels_ = false;
+    // The thread's QPC timeline origin; written before Start returns.
+    int64_t clockStart_ = 0;
+    int64_t clockFrequency_ = 1;
+    std::mutex pauseMutex_;
+    std::vector<PauseEdge> pauseEdges_;
 
     std::mutex devicesMutex_;
     DeviceChoice devices_;

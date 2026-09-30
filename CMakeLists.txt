@@ -43,5 +43,5 @@ target_link_options(CallRecorder PRIVATE /MANIFEST:NO)
 
 target_link_libraries(CallRecorder PRIVATE
     ${OPUSENC_LIBRARY} Opus::opus nlohmann_json::nlohmann_json
-    ole32 shell32 user32 gdi32 advapi32 winhttp comctl32
+    ole32 shell32 user32 gdi32 advapi32 winhttp comctl32 avrt mmdevapi
 )
