@@ -156,6 +156,33 @@ security > Microphone), CallRecorder tells you so, rather than saying no
 microphone was found. If the microphone is silent for a minute, it warns you
 too.
 
+### Detect calls
+
+CallRecorder notices when a call starts in Teams, Zoom, Webex, Slack, Skype,
+WhatsApp, Discord, 8x8, MicroSIP, Linphone or RingCentral, or in Google Meet
+or Teams in a browser. It watches which apps are using a microphone (the same
+list the Windows Volume Mixer shows). For a browser, a window must also be
+showing the meeting. **Detect calls** in **Settings** chooses what happens:
+
+- **Ask me whether to record** (the default): a notification says "Teams call
+  detected". Click it, or press `Ctrl+Alt+R`, to record. When the call ends, a
+  notification offers to stop the recording.
+- **Record automatically, and stop when the call ends**: recording starts by
+  itself, with a reminder to tell everyone on the call. A recording that
+  detection started and stopped within 20 seconds (a microphone check on
+  Teams' pre-join screen, for example) is thrown away.
+- **Off**.
+
+A call counts as started once an app has used the microphone for 2 seconds,
+and as ended once it has stopped for 10 seconds, so switching headsets doesn't
+split a recording. Muting yourself in the call app doesn't end the call,
+because those apps keep the microphone open while you're muted.
+
+A recording made during a call is named after it: `Weekly sync (Teams)` when
+the meeting's window gives its name (Teams, and Google Meet meetings with a
+name), otherwise `Zoom call 30 Sep 2026 14:02`. The tray menu shows **Record
+Teams call** while a call is going on.
+
 ### Only record audio from these apps
 
 By default CallRecorder records everything your PC plays. To record only your
@@ -217,7 +244,7 @@ people on the call.
 
 Tray menu > **Settings** has everything in one window: the Speakr connection,
 audio devices, default tags, hotwords, how long to keep audio, the upload
-delay, which apps to record, separate channels, local-only mode at launch and
+delay, which apps to record, call detection, separate channels, local-only mode at launch and
 **Start CallRecorder when I sign in to Windows**. Saved changes apply straight
 away, apart from the channel layout, which applies from the next recording.
 
@@ -242,7 +269,8 @@ straight away after **Upload now**.
   "upload_delay_seconds": 60,
   "separate_channels": false,
   "echo_cancellation": false,
-  "loopback_apps": []
+  "loopback_apps": [],
+  "call_detection": "ask"
 }
 ```
 
@@ -258,6 +286,7 @@ straight away after **Upload now**.
 | `separate_channels` | `true` records stereo: your microphone on the left, everyone else on the right |
 | `echo_cancellation` | `true` opens the microphone as a communications stream so Windows can apply echo cancellation where the device supports it. Windows may lower other apps' sound while recording. Default `false`; not in Settings |
 | `loopback_apps` | Only record audio from these apps, e.g. `["Teams.exe", "Zoom.exe"]`. Empty records all playback audio |
+| `call_detection` | When a call starts: `"ask"` (default) offers to record it, `"auto"` records it and stops when it ends, `"off"` does nothing. See [Detect calls](#detect-calls) |
 
 If `config.json` can't be read (a typo that breaks the JSON, or a locked file),
 CallRecorder starts in local-only mode so nothing is uploaded by accident, and
@@ -340,7 +369,8 @@ statically.
 
 `build.ps1` also builds and runs the unit tests (`tests/`, the non-UI logic:
 settings, recording files, upload decisions). Add `-SkipTests` to skip them,
-or run `buildelease\CallRecorderTests.exe` directly.
+or run `build
+elease\CallRecorderTests.exe` directly.
 
 To build the installer and portable zip as well (needs
 [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
@@ -353,6 +383,8 @@ To build the installer and portable zip as well (needs
 | File | Role |
 |---|---|
 | `src/main.cpp` | Tray icon, menu, hotkeys, tags, held recordings, session lifecycle |
+| `src/CallDetector.*` | Finds calls in progress from Windows' audio sessions and window titles |
+| `src/CallLogic.h` | Call detection's decisions (which app, meeting name, when a call starts and ends) as small pure functions |
 | `src/Recorder.*` | WASAPI microphone + loopback capture, mixing, device selection and changes |
 | `src/OpusFileWriter.*` | Crash-tolerant Ogg Opus output |
 | `src/Session.*` | The `.json` file for each recording, and crash recovery |
@@ -368,7 +400,7 @@ To build the installer and portable zip as well (needs
 
 ## Roadmap ideas
 
-- Detect meetings (Teams, Zoom, etc. start using the microphone) and offer to record
+- Fill in the title and participants from your calendar
 - Prompt for a title when you stop
 - Configurable hotkeys
 

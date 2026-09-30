@@ -3,6 +3,19 @@
 All notable changes to CallRecorder are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Call detection.** CallRecorder notices when Teams, Zoom, Webex, Slack,
+  Skype, WhatsApp, Discord, 8x8, MicroSIP, Linphone, RingCentral, or Google
+  Meet or Teams in a browser, starts using the microphone. By default it offers
+  to record, and to stop when the call ends. **Detect calls** in Settings
+  (`call_detection` in `config.json`) can make it record automatically, or turn
+  it off.
+- Recordings made during a call are named after it, e.g. `Weekly sync (Teams)`
+  or `Zoom call 30 Sep 2026 14:02`, instead of `Recording 30 Sep 2026 14:02`.
+
 ## [1.2.0] - 2026-09-30
 
 This release adds a Recordings window, a short delay before uploads, and

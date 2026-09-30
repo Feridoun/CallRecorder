@@ -19,6 +19,7 @@ configure_file(res/version.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/version.h
 add_executable(CallRecorder WIN32
     src/main.cpp
     src/Autostart.cpp
+    src/CallDetector.cpp
     src/Config.cpp
     src/HistoryWindow.cpp
     src/SettingsDialog.cpp
@@ -54,6 +55,7 @@ if(CALLRECORDER_TESTS)
     enable_testing()
     add_executable(CallRecorderTests
         tests/TestMain.cpp
+        tests/CallLogicTests.cpp
         tests/ConfigTests.cpp
         tests/HttpTests.cpp
         tests/JsonTests.cpp

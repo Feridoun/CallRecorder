@@ -29,6 +29,8 @@ int GetClampedInt(const json& j, const char* key, int fallback, int low, int hig
     return static_cast<int>(std::clamp(value, static_cast<double>(low), static_cast<double>(high)));
 }
 
+constexpr const char* kCallDetectionNames[] = {"off", "ask", "auto"};  // indexed by CallDetection
+
 // Fills `j` with every setting, in the order the defaults file uses. For an
 // existing file this overwrites values in place, so the user's order and any
 // unknown keys stay as they are.
@@ -49,6 +51,7 @@ void StoreSettings(const Config& config, Json& j) {
     Json apps = Json::array();
     for (const auto& app : config.loopbackApps) apps.push_back(ToUtf8(app));
     j["loopback_apps"] = apps;
+    j["call_detection"] = kCallDetectionNames[static_cast<int>(config.callDetection)];
 }
 
 }  // namespace
@@ -114,6 +117,13 @@ Config Config::Parse(const std::string& text) {
             if (app.is_string()) names.push_back(FromUtf8(app.get<std::string>()));
         }
         config.loopbackApps = NormalizeAppList(names);
+    }
+    // Anything unrecognised keeps the default rather than turning detection off.
+    std::string detection = JsonGet(j, "call_detection", std::string());
+    for (int i = 0; i < static_cast<int>(std::size(kCallDetectionNames)); ++i) {
+        if (_stricmp(detection.c_str(), kCallDetectionNames[i]) == 0) {
+            config.callDetection = static_cast<CallDetection>(i);
+        }
     }
     return config;
 }

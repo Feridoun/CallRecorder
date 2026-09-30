@@ -114,6 +114,17 @@ TEST(ConfigParse_LoopbackAppsAreNormalised) {
     CHECK(c.loopbackApps == Names({L"Teams.exe", L"Zoom.exe"}));
 }
 
+TEST(ConfigParse_CallDetection) {
+    CHECK(Config::Parse("{}").callDetection == CallDetection::kAsk);
+    CHECK(Config::Parse(R"({"call_detection": "off"})").callDetection == CallDetection::kOff);
+    CHECK(Config::Parse(R"({"call_detection": "ask"})").callDetection == CallDetection::kAsk);
+    CHECK(Config::Parse(R"({"call_detection": "Auto"})").callDetection == CallDetection::kAuto);
+    // Unrecognised values keep the default rather than turning detection off or on.
+    CHECK(Config::Parse(R"({"call_detection": "always"})").callDetection == CallDetection::kAsk);
+    CHECK(Config::Parse(R"({"call_detection": true})").callDetection == CallDetection::kAsk);
+    CHECK(Config::Parse(R"({"call_detection": null})").callDetection == CallDetection::kAsk);
+}
+
 TEST(ConfigParse_KeepAudioDaysIsClamped) {
     CHECK_EQ(Config::Parse(R"({"keep_audio_days": -5})").keepAudioDays, 0);
     CHECK_EQ(Config::Parse(R"({"keep_audio_days": 0})").keepAudioDays, 0);

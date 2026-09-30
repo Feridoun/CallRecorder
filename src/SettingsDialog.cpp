@@ -191,6 +191,30 @@ std::wstring SelectedDevice(HWND dialog, int id, const std::vector<std::wstring>
     return index >= 0 && static_cast<size_t>(index) < ids.size() ? ids[index] : std::wstring();
 }
 
+// IDC_CALL_DETECTION's items, in order.
+constexpr struct {
+    CallDetection value;
+    const wchar_t* label;
+} kCallDetectionChoices[] = {
+    {CallDetection::kAsk, L"Ask me whether to record"},
+    {CallDetection::kAuto, L"Record automatically, and stop when the call ends"},
+    {CallDetection::kOff, L"Off"},
+};
+
+void FillCallDetection(HWND dialog, CallDetection chosen) {
+    for (size_t i = 0; i < std::size(kCallDetectionChoices); ++i) {
+        SendDlgItemMessageW(dialog, IDC_CALL_DETECTION, CB_ADDSTRING, 0,
+                            reinterpret_cast<LPARAM>(kCallDetectionChoices[i].label));
+        if (kCallDetectionChoices[i].value == chosen) SendDlgItemMessageW(dialog, IDC_CALL_DETECTION, CB_SETCURSEL, i, 0);
+    }
+}
+
+CallDetection SelectedCallDetection(HWND dialog, CallDetection fallback) {
+    auto index = SendDlgItemMessageW(dialog, IDC_CALL_DETECTION, CB_GETCURSEL, 0, 0);
+    if (index < 0 || static_cast<size_t>(index) >= std::size(kCallDetectionChoices)) return fallback;
+    return kCallDetectionChoices[index].value;
+}
+
 void Init(HWND dialog) {
     HINSTANCE instance = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(dialog, GWLP_HINSTANCE));
     HICON big = LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP));
@@ -226,6 +250,7 @@ void Init(HWND dialog) {
     SetDlgItemTextW(dialog, IDC_LOOPBACK_APPS, JoinList(config.loopbackApps).c_str());
     SendDlgItemMessageW(dialog, IDC_LOOPBACK_APPS, EM_SETCUEBANNER, TRUE,
                         reinterpret_cast<LPARAM>(L"e.g. Teams.exe, Zoom.exe. Leave empty to record all playback audio."));
+    FillCallDetection(dialog, config.callDetection);
     CheckDlgButton(dialog, IDC_SEPARATE, config.separateChannels ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(dialog, IDC_SENSITIVE, config.sensitiveByDefault ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(dialog, IDC_AUTOSTART, Autostart::IsEnabled() ? BST_CHECKED : BST_UNCHECKED);
@@ -254,6 +279,7 @@ void FinishSave(HWND dialog) {
     if (delayOk) config.uploadDelaySeconds = static_cast<int>(std::min<UINT>(delay, kMaxUploadDelay));
     config.separateChannels = IsDlgButtonChecked(dialog, IDC_SEPARATE) == BST_CHECKED;
     config.loopbackApps = SplitList(GetText(dialog, IDC_LOOPBACK_APPS));
+    config.callDetection = SelectedCallDetection(dialog, config.callDetection);
 
     if (!typedToken.empty() && !WriteSpeakrToken(ToUtf8(typedToken))) {
         return SetStatus(dialog, L"Windows Credential Manager refused to store the token.");

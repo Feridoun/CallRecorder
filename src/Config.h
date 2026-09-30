@@ -3,6 +3,9 @@
 #include <string>
 #include <vector>
 
+// What to do when a calling app (Teams, Zoom...) starts using the microphone.
+enum class CallDetection { kOff, kAsk, kAuto };
+
 // %APPDATA%\CallRecorder\config.json. Created with defaults on first run;
 // re-read by the uploader on every cycle, so edits apply without a restart.
 struct Config {
@@ -17,6 +20,7 @@ struct Config {
     bool separateChannels = false;                // stereo: microphone on the left, everyone else on the right
     bool echoCancellation = false;                // open the mic as a communications stream (device echo cancellation)
     std::vector<std::wstring> loopbackApps;       // record only audio these apps play (e.g. Teams.exe); empty = all
+    CallDetection callDetection = CallDetection::kAsk;  // "ask" offers to record a call; "auto" records it
     // Not a setting: true when config.json exists but couldn't be read, in
     // which case the fields above are defaults and the app fails closed
     // (starts in local-only mode). Never saved.
