@@ -27,5 +27,9 @@
   "buildPresets": [
     { "name": "release", "configurePreset": "x64-release" },
     { "name": "debug", "configurePreset": "x64-debug" }
+  ],
+  "testPresets": [
+    { "name": "release", "configurePreset": "x64-release", "output": { "outputOnFailure": true } },
+    { "name": "debug", "configurePreset": "x64-debug", "output": { "outputOnFailure": true } }
   ]
 }

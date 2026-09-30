@@ -45,3 +45,36 @@ target_link_libraries(CallRecorder PRIVATE
     ${OPUSENC_LIBRARY} Opus::opus nlohmann_json::nlohmann_json
     ole32 shell32 user32 gdi32 advapi32 winhttp comctl32
 )
+
+# Unit tests: the non-UI sources compiled straight into a console program, run
+# with `ctest` (build.ps1 does this). They never touch %APPDATA%, the registry
+# or the network; see tests/.
+option(CALLRECORDER_TESTS "Build the unit tests (CallRecorderTests)" ON)
+if(CALLRECORDER_TESTS)
+    enable_testing()
+    add_executable(CallRecorderTests
+        tests/TestMain.cpp
+        tests/ConfigTests.cpp
+        tests/HttpTests.cpp
+        tests/JsonTests.cpp
+        tests/SessionTests.cpp
+        tests/UploadLogicTests.cpp
+        tests/UtilTests.cpp
+        src/Config.cpp
+        src/HttpClient.cpp
+        src/Session.cpp
+        src/Util.cpp
+    )
+    target_include_directories(CallRecorderTests PRIVATE src tests)
+    target_compile_definitions(CallRecorderTests PRIVATE
+        UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
+        $<$<COMPILE_LANGUAGE:CXX>:CALLRECORDER_VERSION="${PROJECT_VERSION}">
+        $<$<COMPILE_LANGUAGE:CXX>:CALLRECORDER_VERSION_W=L"${PROJECT_VERSION}">
+    )
+    target_compile_options(CallRecorderTests PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W4 /utf-8 /permissive->)
+    target_link_libraries(CallRecorderTests PRIVATE
+        nlohmann_json::nlohmann_json
+        ole32 shell32 user32 advapi32 winhttp
+    )
+    add_test(NAME CallRecorderTests COMMAND CallRecorderTests)
+endif()
