@@ -2,6 +2,8 @@
 // uploads them to Speakr for transcription and summaries.
 
 #include "Autostart.h"
+#include "CallDetector.h"
+#include "CallLogic.h"
 #include "Config.h"
 #include "HistoryWindow.h"
 #include "Recorder.h"
@@ -18,6 +20,7 @@
 
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -32,7 +35,12 @@ constexpr UINT kTrayId = 1;
 constexpr UINT_PTR kTooltipTimer = 1;
 constexpr UINT_PTR kMenuTimer = 2;  // delays the left-click menu so a double-click can win
 constexpr UINT_PTR kSetupTimer = 3;  // opens Settings on first run, once the tray is up
+constexpr UINT_PTR kCallTimer = 4;   // looks for calls starting and ending
+constexpr UINT kCallPollMs = 2000;
 constexpr double kMinimumSeconds = 2.0;  // shorter sessions are treated as accidental
+// A recording started and stopped by call detection that's shorter than this
+// was most likely a microphone check (e.g. Teams' pre-join screen), not a call.
+constexpr double kMinimumCallSeconds = 20.0;
 
 enum Command : UINT {
     kToggle = 100, kPause, kMarker, kSensitive, kUploadNow, kRetryRefused, kOpenSpeakr, kSettings, kOpenFolder, kExit,
@@ -72,7 +80,12 @@ struct App {
     bool sensitive = false;  // applies to the current session and the next one
     std::vector<std::wstring> tags;      // Speakr tags for the current session and the next one
     std::vector<std::wstring> menuTags;  // the Tags submenu's items, in order, while it's open
-    std::wstring notificationUrl;  // opened when the current notification is clicked
+    std::function<void()> notificationAction;  // runs when the current notification is clicked
+    CallLogic::CallTracker calls;
+    std::vector<DetectedCall> detectedCalls;  // from the last check
+    std::wstring callApp;  // the call the current recording is of ("Teams"); empty if none
+    bool callStartedRecording = false;  // call detection started the current recording
+    bool callSubjectFound = false;  // the current recording's title names its meeting
     POINT menuPoint{};
     ULONGLONG ignoreSelectUntil = 0;
 };
@@ -115,9 +128,14 @@ bool IsRecording() {
     return app.session.has_value();
 }
 
-void Notify(const std::wstring& title, const std::wstring& text, DWORD flags = NIIF_INFO,
-            const std::wstring& clickUrl = {}) {
-    app.notificationUrl = clickUrl;
+void OpenUrl(const std::wstring& url) {
+    ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+// Shows a notification; clicking it runs `onClick`, if given.
+void NotifyThen(const std::wstring& title, const std::wstring& text, std::function<void()> onClick,
+                DWORD flags = NIIF_INFO) {
+    app.notificationAction = std::move(onClick);
     NOTIFYICONDATAW data = app.tray;
     data.uFlags = NIF_INFO;
     wcsncpy_s(data.szInfoTitle, title.c_str(), _TRUNCATE);
@@ -126,8 +144,9 @@ void Notify(const std::wstring& title, const std::wstring& text, DWORD flags = N
     Shell_NotifyIconW(NIM_MODIFY, &data);
 }
 
-void OpenUrl(const std::wstring& url) {
-    ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+void Notify(const std::wstring& title, const std::wstring& text, DWORD flags = NIIF_INFO,
+            const std::wstring& clickUrl = {}) {
+    NotifyThen(title, text, clickUrl.empty() ? std::function<void()>() : [clickUrl] { OpenUrl(clickUrl); }, flags);
 }
 
 // One line describing the upload queue, e.g. "1 uploading, 2 in Speakr".
@@ -226,10 +245,26 @@ std::wstring IsoUtcIn(int seconds) {
     return FormatIsoUtc(utc);
 }
 
-void StartRecording() {
+// The meeting's name for a call found by the last check, if its window gave one.
+std::wstring DetectedSubject(const std::wstring& callApp) {
+    for (const auto& call : app.detectedCalls) {
+        if (call.app == callApp) return call.subject;
+    }
+    return {};
+}
+
+// callApp: the call being recorded ("Teams"), if known; otherwise a call in
+// progress, if any. automatic: started by call detection, not the user.
+void StartRecording(std::wstring callApp = {}, bool automatic = false) {
     Config config = Config::Load();
     // An unreadable config fails closed: nothing leaves the PC until it's fixed.
     Session session = Session::Create(app.sessionsDir, app.sensitive || config.unreadable, app.tags, config.serverUrl);
+    std::vector<std::wstring> activeCalls = app.calls.Active();
+    if (callApp.empty() && !activeCalls.empty()) callApp = activeCalls.front();
+    std::wstring subject = callApp.empty() ? std::wstring() : DetectedSubject(callApp);
+    if (!callApp.empty()) {
+        session.title = CallLogic::CallTitle(callApp, subject, FormatFriendlyLocal(session.startedUtc));
+    }
     std::wstring error;
     if (!app.recorder->Start(session.audioPath, session.title, ChosenDevices(), config.separateChannels, error)) {
         Notify(L"Couldn't start recording", error, NIIF_ERROR);
@@ -237,17 +272,27 @@ void StartRecording() {
     }
     session.Save();
     app.session = std::move(session);
+    app.callApp = callApp;
+    app.callStartedRecording = automatic;
+    app.callSubjectFound = !subject.empty();
     SetTimer(app.window, kTooltipTimer, 1000, nullptr);
     UpdateTray();
     const Hotkey* stopKey = RegisteredHotkey(kToggle);
     std::wstring stopHint = stopKey ? std::wstring(L"Press ") + stopKey->label + L" to stop." : L"Stop it from the tray menu.";
     std::wstring text = app.session->sensitive ? L"Local only: this session won't be uploaded." : stopHint;
     if (!app.session->sensitive && !app.tags.empty()) text += L"\nTags: " + JoinTags(app.tags);
-    Notify(L"Recording started", text);
+    // Unlike the call app's own recording, nobody else on the call is told.
+    if (automatic) text = L"Let everyone on the call know it's being recorded.\n" + text;
+    Notify(automatic ? L"Recording " + callApp + L" call" : L"Recording started", text);
 }
 
-void StopRecording() {
+// byCallEnd: call detection is stopping it because the call ended.
+void StopRecording(bool byCallEnd = false) {
     if (!IsRecording()) return;
+    double minimum = byCallEnd && app.callStartedRecording ? kMinimumCallSeconds : kMinimumSeconds;
+    app.callApp.clear();
+    app.callStartedRecording = false;
+    app.callSubjectFound = false;
     app.recorder->Stop();
     KillTimer(app.window, kTooltipTimer);
     Session session = std::move(*app.session);
@@ -255,9 +300,11 @@ void StopRecording() {
     UpdateTray();
 
     double seconds = app.recorder->RecordedSeconds();
-    if (seconds < kMinimumSeconds) {
+    if (seconds < minimum) {
         session.Discard();
-        Notify(L"Recording discarded", L"It was shorter than 2 seconds.");
+        Notify(L"Recording discarded", minimum == kMinimumSeconds
+                                           ? L"It was shorter than 2 seconds."
+                                           : L"The call lasted under 20 seconds, so it was probably a microphone check.");
         return;
     }
     session.Finish(seconds);
@@ -365,6 +412,72 @@ void ToggleTag(size_t index) {
     }
 }
 
+// " or press Ctrl+Alt+R", if that hotkey is ours.
+std::wstring ToggleKeyHint() {
+    const Hotkey* key = RegisteredHotkey(kToggle);
+    return key ? std::wstring(L" or press ") + key->label : std::wstring();
+}
+
+void OnCallStarted(const std::wstring& callApp, CallDetection mode) {
+    if (IsRecording()) {
+        // Recording already, e.g. started by hand just before joining: it's of this call.
+        if (app.callApp.empty()) {
+            app.callApp = callApp;
+            app.session->title = CallLogic::CallTitle(callApp, {}, FormatFriendlyLocal(app.session->startedUtc));
+            app.session->Save();
+        }
+        return;
+    }
+    if (mode == CallDetection::kAuto) return StartRecording(callApp, true);
+    NotifyThen(callApp + L" call detected", L"Click here to record it" + ToggleKeyHint() + L".", [callApp] {
+        if (!IsRecording() && app.calls.IsActive(callApp)) StartRecording(callApp);
+    });
+}
+
+void OnCallEnded(const std::wstring& callApp, CallDetection mode) {
+    if (!IsRecording() || app.callApp != callApp) return;
+    if (mode == CallDetection::kAuto) return StopRecording(true);
+    std::wstring id = app.session->id;
+    NotifyThen(callApp + L" call ended", L"Still recording. Click here to stop" + ToggleKeyHint() + L".", [id] {
+        if (IsRecording() && app.session->id == id) StopRecording();
+    });
+}
+
+// Runs every kCallPollMs while call detection is on.
+void CheckCalls() {
+    app.detectedCalls = DetectCalls();
+    std::vector<std::wstring> active;
+    for (const auto& call : app.detectedCalls) active.push_back(call.app);
+    auto events = app.calls.Update(active, GetTickCount64());
+    // Read afresh, so a hand edit to config.json applies like other settings.
+    CallDetection mode = events.empty() ? CallDetection::kOff : Config::Load().callDetection;
+    if (mode == CallDetection::kOff) events.clear();
+    for (const auto& event : events) {
+        event.started ? OnCallStarted(event.app, mode) : OnCallEnded(event.app, mode);
+    }
+    // A Teams meeting window can appear a little after the call starts.
+    if (IsRecording() && !app.callApp.empty() && !app.callSubjectFound) {
+        std::wstring subject = DetectedSubject(app.callApp);
+        if (!subject.empty()) {
+            app.session->title =
+                CallLogic::CallTitle(app.callApp, subject, FormatFriendlyLocal(app.session->startedUtc));
+            app.session->Save();
+            app.callSubjectFound = true;
+        }
+    }
+}
+
+// Starts or stops looking for calls, as the settings say.
+void ApplyCallDetection() {
+    if (Config::Load().callDetection == CallDetection::kOff) {
+        KillTimer(app.window, kCallTimer);
+        app.calls.Clear();
+        app.detectedCalls.clear();
+    } else {
+        SetTimer(app.window, kCallTimer, kCallPollMs, nullptr);
+    }
+}
+
 // Opens Settings and applies what can change straight away: devices (even
 // mid-recording) and anything the uploader reads.
 void OpenSettings() {
@@ -376,6 +489,7 @@ void OpenSettings() {
             Notify(L"Settings saved", L"The channel layout applies from the next recording.", NIIF_INFO | NIIF_NOSOUND);
         }
     }
+    ApplyCallDetection();
     app.uploader->Wake();
 }
 
@@ -466,8 +580,9 @@ void ShowMenu(POINT at) {
     bool paused = recording && app.recorder->IsPaused();
     UINT whenRecording = recording ? MF_ENABLED : MF_GRAYED;
 
-    AppendMenuW(menu, MF_STRING, kToggle,
-                ((recording ? L"Stop recording" : L"Start recording") + Accelerator(kToggle)).c_str());
+    std::vector<std::wstring> activeCalls = app.calls.Active();
+    std::wstring startLabel = activeCalls.empty() ? L"Start recording" : L"Record " + activeCalls.front() + L" call";
+    AppendMenuW(menu, MF_STRING, kToggle, ((recording ? L"Stop recording" : startLabel) + Accelerator(kToggle)).c_str());
     AppendMenuW(menu, MF_STRING | whenRecording, kPause,
                 ((paused ? L"Resume" : L"Pause") + Accelerator(kPause)).c_str());
     AppendMenuW(menu, MF_STRING | whenRecording, kMarker, (L"Add marker" + Accelerator(kMarker)).c_str());
@@ -554,7 +669,11 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
                     ShowMenu({GET_X_LPARAM(wParam), GET_Y_LPARAM(wParam)});
                     break;
                 case NIN_BALLOONUSERCLICK:
-                    if (!app.notificationUrl.empty()) OpenUrl(app.notificationUrl);
+                    if (app.notificationAction) {
+                        // A copy: the action may show a notification, which replaces it.
+                        auto action = app.notificationAction;
+                        action();
+                    }
                     break;
             }
             return 0;
@@ -572,6 +691,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
                 KillTimer(window, kMenuTimer);
                 ShowMenu(app.menuPoint);
             }
+            if (wParam == kCallTimer) CheckCalls();
             if (wParam == kSetupTimer) {
                 KillTimer(window, kSetupTimer);
                 OpenSettings();
@@ -646,6 +766,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     app.localOnlyIcon = MakeDotIcon(RGB(147, 51, 234));
     app.pausedIcon = MakeDotIcon(RGB(245, 158, 11));
     AddTrayIcon();
+    ApplyCallDetection();
 
     std::wstring unavailable;
     for (size_t i = 0; i < kHotkeyCount; ++i) {

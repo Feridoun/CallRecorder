@@ -7,7 +7,7 @@
 IDI_APP ICON "CallRecorder.ico"
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "CallRecorder.manifest"
 
-IDD_SETTINGS DIALOGEX 0, 0, 320, 358
+IDD_SETTINGS DIALOGEX 0, 0, 320, 386
 STYLE DS_SHELLFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 EXSTYLE WS_EX_APPWINDOW
 CAPTION "CallRecorder settings"
@@ -31,7 +31,7 @@ BEGIN
     LTEXT "&Playback", -1, 14, 149, 58, 9
     COMBOBOX IDC_SPEAKERS, 76, 147, 230, 150, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
-    GROUPBOX "Recordings", -1, 7, 172, 306, 159
+    GROUPBOX "Recordings", -1, 7, 172, 306, 187
     LTEXT "Default ta&gs", -1, 14, 187, 58, 9
     EDITTEXT IDC_TAGS, 76, 185, 230, 13, ES_AUTOHSCROLL
     LTEXT "Comma-separated. Ticked in the Tags menu each time CallRecorder starts.", -1, 76, 200, 230, 9
@@ -46,13 +46,16 @@ BEGIN
     LTEXT "seconds (0 to 3600; 0 = at once)", -1, 109, 263, 197, 9
     LTEXT "&Only these apps", -1, 14, 279, 58, 9
     EDITTEXT IDC_LOOPBACK_APPS, 76, 277, 230, 13, ES_AUTOHSCROLL
-    AUTOCHECKBOX "Record me and the others on separate &channels (stereo)", IDC_SEPARATE, 14, 294, 292, 10
-    AUTOCHECKBOX "Start in &local-only (sensitive) mode", IDC_SENSITIVE, 14, 305, 292, 10
-    AUTOCHECKBOX "Start CallRecorder when I sign &in to Windows", IDC_AUTOSTART, 14, 316, 292, 10
+    LTEXT "&Detect calls", -1, 14, 295, 58, 9
+    COMBOBOX IDC_CALL_DETECTION, 76, 293, 230, 60, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT "When Teams, Zoom, Meet, WhatsApp or a softphone starts a call.", -1, 76, 308, 230, 9
+    AUTOCHECKBOX "Record me and the others on separate &channels (stereo)", IDC_SEPARATE, 14, 322, 292, 10
+    AUTOCHECKBOX "Start in &local-only (sensitive) mode", IDC_SENSITIVE, 14, 333, 292, 10
+    AUTOCHECKBOX "Start CallRecorder when I sign &in to Windows", IDC_AUTOSTART, 14, 344, 292, 10
 
-    PUSHBUTTON "Open settings &file", IDC_OPEN_FILE, 7, 338, 76, 14
-    DEFPUSHBUTTON "&Save", IDOK, 207, 338, 50, 14
-    PUSHBUTTON "Cancel", IDCANCEL, 263, 338, 50, 14
+    PUSHBUTTON "Open settings &file", IDC_OPEN_FILE, 7, 366, 76, 14
+    DEFPUSHBUTTON "&Save", IDOK, 207, 366, 50, 14
+    PUSHBUTTON "Cancel", IDCANCEL, 263, 366, 50, 14
 END
 
 VS_VERSION_INFO VERSIONINFO

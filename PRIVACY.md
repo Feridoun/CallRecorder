@@ -32,6 +32,15 @@ only the audio those apps play, which keeps other sounds on your PC (music,
 other calls, notifications) out of the recording. Your microphone is still
 recorded.
 
+**Which apps are in a call.** Unless you turn **Detect calls** off in
+Settings, CallRecorder checks every 2 seconds which apps are using a
+microphone (the same list the Windows Volume Mixer shows). While a call app or
+browser is using one, it also reads the titles of that app's windows to find
+the meeting's name. It doesn't read the audio of other apps and doesn't record
+until you or your settings say so. None of this is stored, except the meeting's
+name in the title of a recording you make, and none of it is sent anywhere
+apart from that title going to Speakr with the recording.
+
 **Your Speakr address and API token.** The address is saved in
 `%APPDATA%\CallRecorder\config.json`. The token is saved in Windows Credential
 Manager, never in a file.
