@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <optional>
 #include <string>
 
 std::string ToUtf8(const std::wstring& text);
@@ -23,3 +24,15 @@ std::wstring FormatDuration(double seconds);
 // %LOCALAPPDATA%\CallRecorder\sessions, created if missing. Deliberately not
 // under Documents, which is often redirected to OneDrive.
 std::wstring SessionsDirectory();
+
+// True for a bare file name: non-empty, no path separators, drive colon, ".."
+// or control characters. Guards names read from files we didn't just write.
+bool IsPlainFileName(const std::wstring& name);
+
+// Replaces `path` with `contents` so a crash or power cut leaves either the
+// old file or the new one, never a partial one: writes a temp file next to it,
+// flushes it to disk, then renames it over the target.
+bool WriteFileAtomically(const std::wstring& path, const std::string& contents);
+
+// The whole file, minus a UTF-8 byte order mark; nullopt if it can't be read.
+std::optional<std::string> ReadFileText(const std::wstring& path);

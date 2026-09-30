@@ -23,10 +23,16 @@ struct Config {
 
     static std::wstring Path();
     static Config Load();  // writes the defaults file if it doesn't exist
+    // The reading half of Load, for text already in hand. Never throws; text
+    // that isn't a JSON object gives defaults with `unreadable` set.
+    static Config Parse(const std::string& text);
     // Writes every setting above, keeping the file's key order and any keys
     // this version doesn't know.
     bool Save() const;
 };
+
+// Trims each name, drops empty ones and repeats (ignoring case), keeping order.
+std::vector<std::wstring> NormalizeAppList(const std::vector<std::wstring>& names);
 
 // Tidies a pasted Speakr address: adds https:// if there's no scheme and
 // drops a trailing slash or /api/v1.

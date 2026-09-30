@@ -2,6 +2,7 @@
 
 #include <shlobj.h>
 
+#include <algorithm>
 #include <cstdio>
 
 std::string ToUtf8(const std::wstring& text) {
@@ -45,6 +46,10 @@ bool ParseIsoUtc(const std::wstring& text, SYSTEMTIME& utc) {
     utc = {};
     unsigned year, month, day, hour, minute, second;
     if (swscanf_s(text.c_str(), L"%4u-%2u-%2uT%2u:%2u:%2u", &year, &month, &day, &hour, &minute, &second) != 6) {
+        return false;
+    }
+    if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) {
+        utc = {};  // hand-edited or damaged; callers treat a zero year as "unset"
         return false;
     }
     utc.wYear = static_cast<WORD>(year);
@@ -105,4 +110,57 @@ std::wstring SessionsDirectory() {
     CoTaskMemFree(base);
     if (!dir.empty()) SHCreateDirectoryExW(nullptr, dir.c_str(), nullptr);
     return dir;
+}
+
+bool IsPlainFileName(const std::wstring& name) {
+    if (name.empty() || name.find(L"..") != std::wstring::npos) return false;
+    return std::none_of(name.begin(), name.end(), [](wchar_t c) { return c < 32 || c == L'\\' || c == L'/' || c == L':'; });
+}
+
+bool WriteFileAtomically(const std::wstring& path, const std::string& contents) {
+    std::wstring temp = path + L".tmp";
+    HANDLE file = CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL,
+                              nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    bool ok = true;
+    size_t offset = 0;
+    while (ok && offset < contents.size()) {
+        DWORD chunk = static_cast<DWORD>(std::min<size_t>(contents.size() - offset, 1u << 20));
+        DWORD written = 0;
+        ok = WriteFile(file, contents.data() + offset, chunk, &written, nullptr) != 0 && written > 0;
+        offset += written;
+    }
+    // Without the flush the rename can reach the disk before the data does,
+    // leaving an empty file after a power cut.
+    ok = ok && FlushFileBuffers(file) != 0;
+    CloseHandle(file);
+    ok = ok && MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+    if (!ok) DeleteFileW(temp.c_str());
+    return ok;
+}
+
+std::optional<std::string> ReadFileText(const std::wstring& path) {
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return std::nullopt;
+    std::string text;
+    char buffer[16384];
+    bool ok = true;
+    for (;;) {
+        DWORD got = 0;
+        if (!ReadFile(file, buffer, sizeof(buffer), &got, nullptr)) {
+            ok = false;
+            break;
+        }
+        if (got == 0) break;
+        text.append(buffer, got);
+    }
+    DWORD error = GetLastError();
+    CloseHandle(file);
+    if (!ok) {
+        SetLastError(error);  // callers tell "missing" from "unreadable" by this
+        return std::nullopt;
+    }
+    if (text.starts_with("\xEF\xBB\xBF")) text.erase(0, 3);
+    return text;
 }

@@ -1,5 +1,6 @@
 #include "Config.h"
 
+#include "Json.h"
 #include "Util.h"
 
 #include <windows.h>
@@ -8,9 +9,64 @@
 
 #include <nlohmann/json.hpp>
 
-#include <fstream>
+#include <algorithm>
+#include <cmath>
 
 using nlohmann::json;
+using nlohmann::ordered_json;
+
+namespace {
+
+bool IsSpace(wchar_t c) {
+    return c == L' ' || c == L'\t' || c == L'\r' || c == L'\n';
+}
+
+// Reads a whole number that may be out of range, or written as 14.0 or "14"
+// by hand, without ever overflowing.
+int GetClampedInt(const json& j, const char* key, int fallback, int low, int high) {
+    double value = JsonGet<double>(j, key, fallback);
+    if (std::isnan(value)) return fallback;
+    return static_cast<int>(std::clamp(value, static_cast<double>(low), static_cast<double>(high)));
+}
+
+// Fills `j` with every setting, in the order the defaults file uses. For an
+// existing file this overwrites values in place, so the user's order and any
+// unknown keys stay as they are.
+template <typename Json>
+void StoreSettings(const Config& config, Json& j) {
+    j["server_url"] = ToUtf8(config.serverUrl);
+    Json tags = Json::array();
+    for (const auto& tag : config.tags) tags.push_back(ToUtf8(tag));
+    j["tags"] = tags;
+    j["hotwords"] = ToUtf8(config.hotwords);
+    j["keep_audio_days"] = config.keepAudioDays;
+    j["sensitive_by_default"] = config.sensitiveByDefault;
+    j["microphone"] = ToUtf8(config.microphone);
+    j["speakers"] = ToUtf8(config.speakers);
+    j["upload_delay_seconds"] = config.uploadDelaySeconds;
+    j["separate_channels"] = config.separateChannels;
+    Json apps = Json::array();
+    for (const auto& app : config.loopbackApps) apps.push_back(ToUtf8(app));
+    j["loopback_apps"] = apps;
+}
+
+}  // namespace
+
+std::vector<std::wstring> NormalizeAppList(const std::vector<std::wstring>& names) {
+    std::vector<std::wstring> result;
+    for (std::wstring name : names) {
+        while (!name.empty() && IsSpace(name.back())) name.pop_back();
+        size_t start = 0;
+        while (start < name.size() && IsSpace(name[start])) ++start;
+        name.erase(0, start);
+        if (name.empty()) continue;
+        bool seen = std::any_of(result.begin(), result.end(), [&](const std::wstring& other) {
+            return CompareStringOrdinal(other.c_str(), -1, name.c_str(), -1, TRUE) == CSTR_EQUAL;
+        });
+        if (!seen) result.push_back(std::move(name));
+    }
+    return result;
+}
 
 std::wstring Config::Path() {
     PWSTR base = nullptr;
@@ -24,67 +80,81 @@ std::wstring Config::Path() {
     return dir + L"\\config.json";
 }
 
+Config Config::Parse(const std::string& text) {
+    Config config;
+    json j = json::parse(text, nullptr, /*allow_exceptions=*/false);
+    if (j.is_discarded() || !j.is_object()) {
+        // Defaults would turn local-only mode off, so say so and let the app
+        // decide, rather than quietly failing open.
+        config.unreadable = true;
+        return config;
+    }
+
+    config.serverUrl = NormalizeServerUrl(FromUtf8(JsonGet(j, "server_url", "")));
+    auto tags = j.find("tags");
+    if (tags != j.end() && tags->is_array()) {
+        config.tags.clear();
+        for (const auto& tag : *tags) {
+            if (tag.is_string() && !tag.get<std::string>().empty()) config.tags.push_back(FromUtf8(tag.get<std::string>()));
+        }
+    }
+    config.hotwords = FromUtf8(JsonGet(j, "hotwords", ""));
+    config.keepAudioDays = GetClampedInt(j, "keep_audio_days", config.keepAudioDays, 0, 36500);
+    config.sensitiveByDefault = JsonGet(j, "sensitive_by_default", config.sensitiveByDefault);
+    config.microphone = FromUtf8(JsonGet(j, "microphone", ""));
+    config.speakers = FromUtf8(JsonGet(j, "speakers", ""));
+    config.uploadDelaySeconds = GetClampedInt(j, "upload_delay_seconds", config.uploadDelaySeconds, 0, 3600);
+    config.separateChannels = JsonGet(j, "separate_channels", config.separateChannels);
+    auto apps = j.find("loopback_apps");
+    if (apps != j.end() && apps->is_array()) {
+        std::vector<std::wstring> names;
+        for (const auto& app : *apps) {
+            if (app.is_string()) names.push_back(FromUtf8(app.get<std::string>()));
+        }
+        config.loopbackApps = NormalizeAppList(names);
+    }
+    return config;
+}
+
 Config Config::Load() {
     Config config;
     std::wstring path = Path();
     if (path.empty()) return config;
 
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        json tags = json::array();
-        for (const auto& tag : config.tags) tags.push_back(ToUtf8(tag));
-        json defaults = {
-            {"server_url", ToUtf8(config.serverUrl)},
-            {"tags", tags},
-            {"hotwords", ""},
-            {"keep_audio_days", config.keepAudioDays},
-            {"sensitive_by_default", config.sensitiveByDefault},
-            {"microphone", ""},
-            {"speakers", ""},
-        };
-        std::ofstream(path, std::ios::binary) << defaults.dump(2) << "\n";
+    auto text = ReadFileText(path);
+    if (!text) {
+        DWORD error = GetLastError();
+        if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND) {
+            config.unreadable = true;  // there, but locked or damaged: don't overwrite it
+            return config;
+        }
+        ordered_json defaults;
+        StoreSettings(config, defaults);
+        WriteFileAtomically(path, defaults.dump(2) + "\n");
         return config;
     }
-
-    json j = json::parse(in, nullptr, /*allow_exceptions=*/false);
-    if (j.is_discarded() || !j.is_object()) return config;  // keep defaults rather than fail
-
-    config.serverUrl = NormalizeServerUrl(FromUtf8(j.value("server_url", ToUtf8(config.serverUrl))));
-    if (j.contains("tags") && j["tags"].is_array()) {
-        config.tags.clear();
-        for (const auto& tag : j["tags"]) {
-            if (tag.is_string() && !tag.get<std::string>().empty()) config.tags.push_back(FromUtf8(tag.get<std::string>()));
-        }
-    }
-    config.hotwords = FromUtf8(j.value("hotwords", ""));
-    config.keepAudioDays = j.value("keep_audio_days", config.keepAudioDays);
-    config.sensitiveByDefault = j.value("sensitive_by_default", config.sensitiveByDefault);
-    config.microphone = FromUtf8(j.value("microphone", ""));
-    config.speakers = FromUtf8(j.value("speakers", ""));
-    return config;
+    return Parse(*text);
 }
 
 bool Config::Save() const {
-    Load();  // make sure the file exists
     std::wstring path = Path();
     if (path.empty()) return false;
     // ordered_json keeps the user's key order and any keys we don't know.
-    nlohmann::ordered_json j;
-    {
-        std::ifstream in(path, std::ios::binary);
-        j = nlohmann::ordered_json::parse(in, nullptr, /*allow_exceptions=*/false);
+    ordered_json j = ordered_json::object();
+    auto text = ReadFileText(path);
+    if (text) {
+        ordered_json existing = ordered_json::parse(*text, nullptr, /*allow_exceptions=*/false);
+        if (!existing.is_discarded() && existing.is_object()) {
+            j = std::move(existing);
+        } else if (!CopyFileW(path.c_str(), (path + L".bad").c_str(), FALSE)) {
+            return false;  // don't destroy the user's hand edits without a copy
+        }
+    } else {
+        DWORD error = GetLastError();
+        if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND) return false;
     }
-    if (j.is_discarded() || !j.is_object()) j = nlohmann::ordered_json::object();
-    j["server_url"] = ToUtf8(serverUrl);
-    j["tags"] = nlohmann::ordered_json::array();
-    for (const auto& tag : tags) j["tags"].push_back(ToUtf8(tag));
-    j["hotwords"] = ToUtf8(hotwords);
-    j["keep_audio_days"] = keepAudioDays;
-    j["sensitive_by_default"] = sensitiveByDefault;
-    j["microphone"] = ToUtf8(microphone);
-    j["speakers"] = ToUtf8(speakers);
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    return static_cast<bool>(out << j.dump(2) << "\n");
+    StoreSettings(*this, j);
+    return WriteFileAtomically(path, j.dump(2) + "\n");
 }
 
 std::wstring NormalizeServerUrl(std::wstring url) {
