@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
 PackageIdentifier: Feridoun.CallRecorder
-PackageVersion: 1.1.0
+PackageVersion: 1.2.0
 PackageLocale: en-US
 Publisher: Fareedoon Ahmed
 PublisherUrl: https://github.com/Feridoun
@@ -25,7 +25,7 @@ Tags:
 - transcription
 - teams
 - zoom
-ReleaseNotes: Choose which microphone and playback device to record from the tray menu. The choice applies straight away, even mid-recording.
-ReleaseNotesUrl: https://github.com/Feridoun/CallRecorder/releases/tag/v1.1.0
+ReleaseNotes: A Recordings window, a short delay before uploads with Keep last recording on this PC, held recordings for a new server, optional stereo and per-app capture, and fixes for crashes, lost or duplicate uploads and audio deleted after a server change.
+ReleaseNotesUrl: https://github.com/Feridoun/CallRecorder/releases/tag/v1.2.0
 ManifestType: defaultLocale
 ManifestVersion: 1.10.0
