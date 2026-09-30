@@ -4,9 +4,6 @@ A companion to [Speakr](https://github.com/murtaza-nasir/speakr): a small
 Windows tray app that records your meetings and calls and sends them to your
 self-hosted Speakr server for transcription and summaries.
 
-Called CallRecorder up to version 1.2. Upgrading moves your settings,
-recordings, API token and Start at login setting across on first start.
-
 It records **both sides of a call** without a virtual audio cable: your
 microphone mixed with whatever your speakers or headset are playing (Teams,
 Zoom, Google Meet, WhatsApp, a softphone and so on). One hotkey starts it, the
@@ -41,7 +38,16 @@ ready.
 
 ## Install
 
-Download from [Releases](https://github.com/Feridoun/MeetingRecorder/releases/latest):
+With [winget](https://learn.microsoft.com/windows/package-manager/winget/):
+
+```
+winget install Feridoun.MeetingRecorder
+```
+
+This runs the installer below. `winget upgrade Feridoun.MeetingRecorder`
+updates it later.
+
+Or download from [Releases](https://github.com/Feridoun/MeetingRecorder/releases/latest):
 
 - **`MeetingRecorder-Setup-<version>.exe`**: installer. Installs for your user
   only (no admin prompt) and can start MeetingRecorder when you sign in.
