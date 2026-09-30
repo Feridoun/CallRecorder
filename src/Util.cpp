@@ -109,7 +109,7 @@ std::wstring SessionsDirectory() {
     PWSTR base = nullptr;
     std::wstring dir;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &base))) {
-        dir = std::wstring(base) + L"\\CallRecorder\\sessions";
+        dir = std::wstring(base) + L"\\MeetingRecorder\\sessions";
     }
     CoTaskMemFree(base);
     if (!dir.empty()) SHCreateDirectoryExW(nullptr, dir.c_str(), nullptr);

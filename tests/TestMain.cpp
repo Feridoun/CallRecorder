@@ -31,7 +31,7 @@ TempDir::TempDir() {
     wchar_t temp[MAX_PATH + 1];
     DWORD n = GetTempPathW(MAX_PATH, temp);
     static int counter = 0;
-    path_ = std::wstring(temp, n) + L"CallRecorderTests_" + std::to_wstring(GetCurrentProcessId()) + L"_" +
+    path_ = std::wstring(temp, n) + L"MeetingRecorderTests_" + std::to_wstring(GetCurrentProcessId()) + L"_" +
             std::to_wstring(GetTickCount64()) + L"_" + std::to_wstring(++counter);
     std::filesystem::create_directories(path_);
 }

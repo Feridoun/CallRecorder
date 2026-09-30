@@ -6,7 +6,7 @@
 // What to do when a calling app (Teams, Zoom...) starts using the microphone.
 enum class CallDetection { kOff, kAsk, kAuto };
 
-// %APPDATA%\CallRecorder\config.json. Created with defaults on first run;
+// %APPDATA%\MeetingRecorder\config.json. Created with defaults on first run;
 // re-read by the uploader on every cycle, so edits apply without a restart.
 struct Config {
     std::wstring serverUrl;                       // e.g. https://speakr.example.com; empty until set up
@@ -43,7 +43,7 @@ std::vector<std::wstring> NormalizeAppList(const std::vector<std::wstring>& name
 // drops a trailing slash or /api/v1.
 std::wstring NormalizeServerUrl(std::wstring url);
 
-// The Speakr API token, in Windows Credential Manager ("CallRecorder:Speakr").
+// The Speakr API token, in Windows Credential Manager ("MeetingRecorder:Speakr").
 // Empty if not set.
 std::string ReadSpeakrToken();
 bool WriteSpeakrToken(const std::string& token);

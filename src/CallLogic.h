@@ -15,7 +15,7 @@
 // list.
 namespace CallLogic {
 
-// A calling app CallRecorder recognises.
+// A calling app MeetingRecorder recognises.
 struct CallApp {
     std::wstring_view name;              // shown to the user and used in titles, e.g. L"Teams"
     std::wstring_view exes[4];           // executables whose microphone use means a call; windows to read titles from

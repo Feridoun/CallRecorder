@@ -165,7 +165,8 @@ TEST(Session_CreateSuffixesTheStampWhenTaken) {
     }
     Session s = Session::Create(dir.Path(), false, {}, L"u");
     CHECK(std::find(taken.begin(), taken.end(), s.id) == taken.end());
-    CHECK(s.id.find(L"_2") == 17);
+    // Not find(L"_2"): from 20:00 the stamp itself contains "_2" at 10.
+    CHECK(s.id.size() == 19 && s.id.ends_with(L"_2"));
 }
 
 TEST(Session_LoadOfMalformedSidecarsNeverThrows) {

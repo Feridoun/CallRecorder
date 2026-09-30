@@ -177,7 +177,7 @@ HttpClient::HttpClient(const std::wstring& baseUrl, std::string bearerToken) : t
     basePath_ = path;
     while (!basePath_.empty() && basePath_.back() == L'/') basePath_.pop_back();
 
-    session_ = WinHttpOpen(L"CallRecorder/" CALLRECORDER_VERSION_W, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+    session_ = WinHttpOpen(L"MeetingRecorder/" MEETINGRECORDER_VERSION_W, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
                            WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session_) {
         connectError_ = GetLastError();
@@ -207,7 +207,7 @@ HttpResponse HttpClient::PostMultipart(const std::wstring& path, const Fields& f
                                        const std::wstring& filePath, const std::string& fileName,
                                        const std::string& fileType) {
     std::random_device random;
-    std::string boundary = "----CallRecorder" + std::to_string(random()) + std::to_string(random());
+    std::string boundary = "----MeetingRecorder" + std::to_string(random()) + std::to_string(random());
 
     std::string head;
     for (const auto& [name, value] : fields) {

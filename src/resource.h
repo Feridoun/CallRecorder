@@ -1,6 +1,6 @@
 #pragma once
 
-// Shared by CallRecorder.rc and the C++ code.
+// Shared by MeetingRecorder.rc and the C++ code.
 #define IDI_APP 1
 #define IDD_SETTINGS 100
 #define IDC_URL 101

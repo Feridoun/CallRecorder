@@ -1,7 +1,7 @@
 Third-party notices
 ===================
 
-CallRecorder.exe statically links the libraries below. Their licences follow.
+MeetingRecorder.exe statically links the libraries below. Their licences follow.
 
 
 ------------------------------------------------------------------------

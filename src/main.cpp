@@ -1,4 +1,4 @@
-// CallRecorder: a tray app that records calls and meetings into sessions and
+// MeetingRecorder: a tray app that records meetings and calls into sessions and
 // uploads them to Speakr for transcription and summaries.
 
 #include "Autostart.h"
@@ -6,6 +6,7 @@
 #include "CallLogic.h"
 #include "Config.h"
 #include "HistoryWindow.h"
+#include "Migration.h"
 #include "Recorder.h"
 #include "Session.h"
 #include "SettingsDialog.h"
@@ -27,7 +28,7 @@
 
 namespace {
 
-constexpr wchar_t kAppName[] = L"CallRecorder";
+constexpr wchar_t kAppName[] = L"MeetingRecorder";
 constexpr UINT kTrayMessage = WM_APP + 1;
 static_assert(kTrayMessage != Recorder::kWarningMessage && kTrayMessage != Uploader::kMessage &&
               Recorder::kWarningMessage != Uploader::kMessage);
@@ -727,13 +728,33 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
-    HANDLE singleInstance = CreateMutexW(nullptr, TRUE, L"Local\\CallRecorder.SingleInstance");
+    HANDLE singleInstance = CreateMutexW(nullptr, TRUE, L"Local\\MeetingRecorder.SingleInstance");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        MessageBoxW(nullptr, L"CallRecorder is already running. Look for it in the system tray.", kAppName,
+        MessageBoxW(nullptr, L"MeetingRecorder is already running. Look for it in the system tray.", kAppName,
                     MB_ICONINFORMATION);
         return 0;
     }
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+
+    // Carries settings and recordings over from when the app was CallRecorder.
+    if (Migration::OldAppRunning()) {
+        MessageBoxW(nullptr,
+                    L"CallRecorder, this app's old name, is still running. Exit it from its tray icon, then start "
+                    L"MeetingRecorder again. Your settings and recordings move over when you do.",
+                    kAppName, MB_ICONINFORMATION);
+        return 0;
+    }
+    std::wstring notMoved = Migration::FromCallRecorder();
+    if (!notMoved.empty()) {
+        // Stop before creating the new folders, or the next start would find
+        // them and skip the move.
+        MessageBoxW(nullptr,
+                    (L"Couldn't move your settings and recordings over from CallRecorder, this app's old name:\n\n" +
+                     notMoved + L"\n\nClose anything using these folders, then start MeetingRecorder again.")
+                        .c_str(),
+                    kAppName, MB_ICONWARNING);
+        return 1;
+    }
 
     app.sessionsDir = SessionsDirectory();
     if (app.sessionsDir.empty()) {
@@ -746,7 +767,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     windowClass.lpfnWndProc = WindowProc;
     windowClass.hInstance = instance;
     windowClass.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP));
-    windowClass.lpszClassName = L"CallRecorderWindow";
+    windowClass.lpszClassName = L"MeetingRecorderWindow";
     RegisterClassExW(&windowClass);
     // A hidden top-level window rather than a message-only one: message-only
     // windows don't receive the TaskbarCreated broadcast.
