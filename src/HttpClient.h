@@ -17,6 +17,13 @@ struct HttpResponse {
     std::wstring Describe() const;  // for notifications and upload_error
 };
 
+// True for a plain http:// address whose host is on the public internet: the
+// API token and recordings would travel unencrypted. Local and private hosts
+// (localhost, loopback, RFC 1918, link-local, CGNAT/Tailscale, ULA, single-label
+// names, .local/.lan/.home.arpa/.internal/.ts.net) are not "public". Pure string
+// parsing, no network access. False if the URL can't be parsed.
+bool IsUnencryptedPublicUrl(const std::wstring& url);
+
 // Minimal synchronous HTTPS client for the Speakr API. Redirects are disabled
 // so an auth problem surfaces as a status code, not a login page.
 class HttpClient {
@@ -46,11 +53,16 @@ private:
     HttpResponse Send(const wchar_t* method, const std::wstring& path, const std::wstring& contentType,
                       const std::string& head, const std::wstring& filePath, const std::string& tail);
 
+    // A failure that reports the abort if there was one: closing a request
+    // under WinHTTP otherwise surfaces as a generic invalid-handle error.
+    HttpResponse Fail(DWORD error);
+
     HINTERNET session_ = nullptr;
     HINTERNET connection_ = nullptr;
     bool secure_ = true;
     std::wstring basePath_;
     std::string token_;
+    DWORD connectError_ = 0;  // why the constructor couldn't set up a connection
 
     std::mutex requestMutex_;
     HINTERNET activeRequest_ = nullptr;
