@@ -24,6 +24,11 @@ struct DeviceChoice {
     // instead of everything the playback device plays. Empty records all
     // system audio.
     std::vector<std::wstring> loopbackApps;
+    // Open the microphone as a communications stream, so devices that offer
+    // echo cancellation apply it. Off by default: Windows may also turn other
+    // apps' audio down while a communications stream is open (Sound settings >
+    // Communications), which would change what the user hears.
+    bool echoCancellation = false;
 };
 
 // Records "both sides of a call": a microphone (you) mixed with a loopback

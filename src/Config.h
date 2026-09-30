@@ -15,6 +15,7 @@ struct Config {
     std::wstring speakers;                        // Windows device ID; empty = default playback device
     int uploadDelaySeconds = 60;                  // wait this long after stopping before uploading (0 = at once)
     bool separateChannels = false;                // stereo: microphone on the left, everyone else on the right
+    bool echoCancellation = false;                // open the mic as a communications stream (device echo cancellation)
     std::vector<std::wstring> loopbackApps;       // record only audio these apps play (e.g. Teams.exe); empty = all
     // Not a setting: true when config.json exists but couldn't be read, in
     // which case the fields above are defaults and the app fails closed

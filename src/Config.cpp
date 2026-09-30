@@ -45,6 +45,7 @@ void StoreSettings(const Config& config, Json& j) {
     j["speakers"] = ToUtf8(config.speakers);
     j["upload_delay_seconds"] = config.uploadDelaySeconds;
     j["separate_channels"] = config.separateChannels;
+    j["echo_cancellation"] = config.echoCancellation;
     Json apps = Json::array();
     for (const auto& app : config.loopbackApps) apps.push_back(ToUtf8(app));
     j["loopback_apps"] = apps;
@@ -105,6 +106,7 @@ Config Config::Parse(const std::string& text) {
     config.speakers = FromUtf8(JsonGet(j, "speakers", ""));
     config.uploadDelaySeconds = GetClampedInt(j, "upload_delay_seconds", config.uploadDelaySeconds, 0, 3600);
     config.separateChannels = JsonGet(j, "separate_channels", config.separateChannels);
+    config.echoCancellation = JsonGet(j, "echo_cancellation", config.echoCancellation);
     auto apps = j.find("loopback_apps");
     if (apps != j.end() && apps->is_array()) {
         std::vector<std::wstring> names;

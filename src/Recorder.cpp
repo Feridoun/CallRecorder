@@ -185,6 +185,9 @@ public:
     // An empty ID follows the Windows default. Takes effect on the next Open().
     // Returns whether the choice changed.
     bool Choose(const std::wstring& id) { return std::exchange(chosenId_, id) != id; }
+    // Microphone only: open as a communications stream. Takes effect on the
+    // next Open(); returns whether the setting changed.
+    bool SetCommunications(bool on) { return std::exchange(communications_, on) != on; }
     // A device was chosen but isn't the one open (or nothing is open).
     bool FellBack() const { return !chosenId_.empty() && openedId_ != chosenId_; }
     bool FollowsDefault() const { return chosenId_.empty() || FellBack(); }
@@ -334,7 +337,7 @@ private:
         HRESULT hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &client_);
         if (FAILED(hr)) return hr;
 
-        if (!loopback_) {
+        if (!loopback_ && communications_) {
             // Tell Windows this is a call. Devices that offer echo cancellation
             // or noise suppression for communications then apply it, which
             // stops the microphone re-recording the other side when the user
@@ -395,6 +398,7 @@ private:
     ERole role_;
     bool loopback_;
     std::wstring chosenId_;
+    bool communications_ = false;
     std::wstring openedId_;
     HRESULT lastError_ = S_OK;
     UINT32 channels_ = 1;
@@ -693,7 +697,9 @@ void Recorder::Run(std::wstring audioPath, std::wstring title, HANDLE ready, std
         devicesChosen_ = false;
         bool appsChanged = appNames != devices_.loopbackApps;
         appNames = devices_.loopbackApps;
-        return std::array{mic.Choose(devices_.microphone), system.Choose(devices_.speakers), appsChanged};
+        bool micChanged = mic.Choose(devices_.microphone);
+        micChanged = mic.SetCommunications(devices_.echoCancellation) || micChanged;
+        return std::array{micChanged, system.Choose(devices_.speakers), appsChanged};
     };
     takeChoice();
     apps.SetApps(appNames);

@@ -185,7 +185,7 @@ std::wstring JoinTags(const std::vector<std::wstring>& tags) {
 
 DeviceChoice ChosenDevices() {
     Config config = Config::Load();
-    return {config.microphone, config.speakers, config.loopbackApps};
+    return {config.microphone, config.speakers, config.loopbackApps, config.echoCancellation};
 }
 
 // The hotkey for a command, if it registered (else the tray menu is the only way).
