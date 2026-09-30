@@ -19,9 +19,6 @@
 #include <thread>
 #include <vector>
 
-// TODO(merge): declared in HttpClient.h
-bool IsUnencryptedPublicUrl(const std::wstring& url);
-
 namespace {
 
 HWND openDialog = nullptr;
@@ -354,10 +351,3 @@ bool ShowSettingsDialog(HINSTANCE instance, HWND owner) {
     }
     return DialogBoxParamW(instance, MAKEINTRESOURCEW(IDD_SETTINGS), owner, DialogProc, 0) == IDOK;
 }
-
-#ifndef CALLRECORDER_HAVE_URL_CHECK
-// Temporary until HttpClient.cpp provides it after the merge; remove then.
-bool IsUnencryptedPublicUrl(const std::wstring&) {
-    return false;
-}
-#endif
