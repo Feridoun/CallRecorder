@@ -13,18 +13,49 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
+
+// TODO(merge): declared in HttpClient.h
+bool IsUnencryptedPublicUrl(const std::wstring& url);
 
 namespace {
 
 HWND openDialog = nullptr;
+constexpr int kMaxUploadDelay = 3600;  // seconds
+
+// Posted by the connection-test thread to the dialog; lParam is a TestResult*
+// the receiver deletes.
+constexpr UINT kTestDone = WM_APP + 1;
+
+struct TestResult {
+    std::wstring text;
+    bool ok;
+    bool thenSave;  // the test was started by Save, which carries on if it's fine
+};
+
+// Shared with the test thread so it never touches a dialog that's gone
+// (an HWND value can be reused, so IsWindow wouldn't tell).
+struct Liveness {
+    std::mutex mutex;
+    bool alive = true;
+};
+
+constexpr wchar_t kInsecureWarning[] =
+    L"This address uses http, so your recordings and API token would travel unencrypted. Use https if you can.";
+constexpr wchar_t kUnreadableNote[] =
+    L"Your settings file couldn't be read. Saving will replace it; the old file is kept as config.json.bad.";
 
 // What the dialog was opened with, to tell what the user changed.
 struct State {
     Config original;
     std::vector<std::wstring> micIds;      // IDC_MIC's items, in order; "" is the default
     std::vector<std::wstring> speakerIds;  // IDC_SPEAKERS's items, in order; "" is the default
+    bool testing = false;                  // a connection test is running
+    std::shared_ptr<Liveness> liveness;
 };
 State state;
 
@@ -45,13 +76,13 @@ std::wstring Trim(const std::wstring& text) {
     return text.substr(start, text.find_last_not_of(L" \t\r\n") - start + 1);
 }
 
-std::wstring JoinTags(const std::vector<std::wstring>& tags) {
+std::wstring JoinList(const std::vector<std::wstring>& tags) {
     std::wstring joined;
     for (const auto& tag : tags) joined += (joined.empty() ? L"" : L", ") + tag;
     return joined;
 }
 
-std::vector<std::wstring> SplitTags(const std::wstring& text) {
+std::vector<std::wstring> SplitList(const std::wstring& text) {
     std::vector<std::wstring> tags;
     size_t start = 0;
     while (start <= text.size()) {
@@ -93,18 +124,45 @@ std::string TokenToUse(HWND dialog) {
     return typed.empty() ? ReadSpeakrToken() : ToUtf8(typed);
 }
 
-// Checks the address and token in the boxes, showing the result. Returns
-// false (with the reason shown) if either is missing.
-bool Test(HWND dialog, bool& ok) {
-    ok = false;
+bool IsInsecure(HWND dialog) {
+    std::wstring text = Trim(GetText(dialog, IDC_URL));
+    return !text.empty() && IsUnencryptedPublicUrl(NormalizeServerUrl(text));
+}
+
+// What the status line says when no test result is showing.
+void ShowBaselineStatus(HWND dialog) {
+    if (IsInsecure(dialog)) return SetStatus(dialog, kInsecureWarning);
+    SetStatus(dialog, state.original.unreadable ? kUnreadableNote : L"");
+}
+
+// While a test runs, the boxes and buttons that would change or repeat it are
+// off; Cancel stays usable.
+void SetTesting(HWND dialog, bool testing) {
+    state.testing = testing;
+    if (testing) SetFocus(GetDlgItem(dialog, IDCANCEL));
+    for (int id : {IDC_TEST, IDOK, IDC_URL, IDC_TOKEN}) EnableWindow(GetDlgItem(dialog, id), !testing);
+    if (!testing) SetFocus(GetDlgItem(dialog, IDOK));
+}
+
+// Starts checking the address and token in the boxes on a worker thread (a
+// black-holed server can take minutes, and the hotkeys need the UI thread).
+// The result comes back as kTestDone. Returns false (with the reason shown)
+// if the address or token is missing.
+bool BeginTest(HWND dialog, bool thenSave) {
     std::wstring url = NormalizeServerUrl(GetText(dialog, IDC_URL));
     std::string token = TokenToUse(dialog);
     if (url.empty()) return SetStatus(dialog, L"Enter your Speakr address."), false;
     if (token.empty()) return SetStatus(dialog, L"Enter an API token."), false;
+    SetTesting(dialog, true);
     SetStatus(dialog, L"Checking...");
-    HCURSOR previous = SetCursor(LoadCursorW(nullptr, IDC_WAIT));
-    SetStatus(dialog, CheckConnection(url, token, ok));
-    SetCursor(previous);
+    std::thread([dialog, url, token, thenSave, live = state.liveness] {
+        bool ok = false;
+        std::wstring text = CheckConnection(url, token, ok);
+        auto* result = new TestResult{std::move(text), ok, thenSave};
+        // Posting under the lock: the dialog can't finish being destroyed meanwhile.
+        std::lock_guard lock(live->mutex);
+        if (!live->alive || !PostMessageW(dialog, kTestDone, 0, reinterpret_cast<LPARAM>(result))) delete result;
+    }).detach();
     return true;
 }
 
@@ -145,6 +203,7 @@ void Init(HWND dialog) {
     SendMessageW(dialog, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(small));
 
     state = {};
+    state.liveness = std::make_shared<Liveness>();
     state.original = Config::Load();
     const Config& config = state.original;
 
@@ -159,45 +218,45 @@ void Init(HWND dialog) {
     FillDevices(dialog, IDC_MIC, true, config.microphone, state.micIds);
     FillDevices(dialog, IDC_SPEAKERS, false, config.speakers, state.speakerIds);
 
-    SetDlgItemTextW(dialog, IDC_TAGS, JoinTags(config.tags).c_str());
+    SetDlgItemTextW(dialog, IDC_TAGS, JoinList(config.tags).c_str());
     SetDlgItemTextW(dialog, IDC_HOTWORDS, config.hotwords.c_str());
     SendDlgItemMessageW(dialog, IDC_HOTWORDS, EM_SETCUEBANNER, TRUE,
                         reinterpret_cast<LPARAM>(L"e.g. Anika, Kubernetes, SLA"));
     SetDlgItemInt(dialog, IDC_KEEP_DAYS, std::max(config.keepAudioDays, 0), FALSE);
+    SendDlgItemMessageW(dialog, IDC_UPLOAD_DELAY, EM_LIMITTEXT, 4, 0);
+    SetDlgItemInt(dialog, IDC_UPLOAD_DELAY, static_cast<UINT>(std::clamp(config.uploadDelaySeconds, 0, kMaxUploadDelay)),
+                  FALSE);
+    SetDlgItemTextW(dialog, IDC_LOOPBACK_APPS, JoinList(config.loopbackApps).c_str());
+    SendDlgItemMessageW(dialog, IDC_LOOPBACK_APPS, EM_SETCUEBANNER, TRUE,
+                        reinterpret_cast<LPARAM>(L"e.g. Teams.exe, Zoom.exe. Leave empty to record all playback audio."));
+    CheckDlgButton(dialog, IDC_SEPARATE, config.separateChannels ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(dialog, IDC_SENSITIVE, config.sensitiveByDefault ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(dialog, IDC_AUTOSTART, Autostart::IsEnabled() ? BST_CHECKED : BST_UNCHECKED);
 
+    ShowBaselineStatus(dialog);
     SetForegroundWindow(dialog);
     SetFocus(GetDlgItem(dialog, config.serverUrl.empty() ? IDC_URL : haveToken ? IDC_MIC : IDC_TOKEN));
 }
 
-void Save(HWND dialog) {
+// Writes the dialog's settings and closes it.
+void FinishSave(HWND dialog) {
     Config config = state.original;
     config.serverUrl = NormalizeServerUrl(GetText(dialog, IDC_URL));
     std::wstring typedToken = Trim(GetText(dialog, IDC_TOKEN));
 
-    // Only check the connection when it changed, so saving a device or tag
-    // doesn't need the server to be reachable.
-    if (config.serverUrl != state.original.serverUrl || !typedToken.empty()) {
-        bool ok;
-        if (!Test(dialog, ok)) return;
-        if (!ok) {
-            std::wstring result = GetText(dialog, IDC_STATUS);
-            if (MessageBoxW(dialog, (result + L"\n\nSave these settings anyway?").c_str(), L"CallRecorder",
-                            MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) {
-                return;
-            }
-        }
-    }
-
     config.microphone = SelectedDevice(dialog, IDC_MIC, state.micIds);
     config.speakers = SelectedDevice(dialog, IDC_SPEAKERS, state.speakerIds);
-    config.tags = SplitTags(GetText(dialog, IDC_TAGS));
+    config.tags = SplitList(GetText(dialog, IDC_TAGS));
     config.hotwords = Trim(GetText(dialog, IDC_HOTWORDS));
     BOOL daysOk = FALSE;
     UINT days = GetDlgItemInt(dialog, IDC_KEEP_DAYS, &daysOk, FALSE);
     config.keepAudioDays = daysOk ? static_cast<int>(std::min(days, 36500u)) : 0;
     config.sensitiveByDefault = IsDlgButtonChecked(dialog, IDC_SENSITIVE) == BST_CHECKED;
+    BOOL delayOk = FALSE;
+    UINT delay = GetDlgItemInt(dialog, IDC_UPLOAD_DELAY, &delayOk, FALSE);
+    if (delayOk) config.uploadDelaySeconds = static_cast<int>(std::min<UINT>(delay, kMaxUploadDelay));
+    config.separateChannels = IsDlgButtonChecked(dialog, IDC_SEPARATE) == BST_CHECKED;
+    config.loopbackApps = SplitList(GetText(dialog, IDC_LOOPBACK_APPS));
 
     if (!typedToken.empty() && !WriteSpeakrToken(ToUtf8(typedToken))) {
         return SetStatus(dialog, L"Windows Credential Manager refused to store the token.");
@@ -214,7 +273,37 @@ void Save(HWND dialog) {
     EndDialog(dialog, IDOK);
 }
 
-INT_PTR CALLBACK DialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM) {
+// Checks the connection first if the address or token changed, so saving a
+// device or tag doesn't need the server to be reachable. The save then
+// finishes when the test's result arrives (OnTestDone).
+void Save(HWND dialog) {
+    if (state.testing) return;
+    bool connectionChanged = NormalizeServerUrl(GetText(dialog, IDC_URL)) != state.original.serverUrl ||
+                             !Trim(GetText(dialog, IDC_TOKEN)).empty();
+    if (!connectionChanged) return FinishSave(dialog);
+    if (IsInsecure(dialog) &&
+        MessageBoxW(dialog, (std::wstring(kInsecureWarning) + L"\n\nSave this address anyway?").c_str(),
+                    L"CallRecorder", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) {
+        return;
+    }
+    BeginTest(dialog, true);
+}
+
+void OnTestDone(HWND dialog, const TestResult& result) {
+    SetTesting(dialog, false);
+    std::wstring text = result.text;
+    if (IsInsecure(dialog)) text += L"\n" + std::wstring(kInsecureWarning);
+    SetStatus(dialog, text);
+    if (!result.thenSave) return;
+    if (!result.ok &&
+        MessageBoxW(dialog, (result.text + L"\n\nSave these settings anyway?").c_str(), L"CallRecorder",
+                    MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) {
+        return;
+    }
+    FinishSave(dialog);
+}
+
+INT_PTR CALLBACK DialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_INITDIALOG:
             openDialog = dialog;
@@ -222,11 +311,12 @@ INT_PTR CALLBACK DialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM) {
             return FALSE;  // focus set in Init
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
-                case IDC_TEST: {
-                    bool ok;
-                    Test(dialog, ok);
+                case IDC_TEST:
+                    if (!state.testing) BeginTest(dialog, false);
                     return TRUE;
-                }
+                case IDC_URL:
+                    if (HIWORD(wParam) == EN_CHANGE && !state.testing) ShowBaselineStatus(dialog);
+                    return TRUE;
                 case IDC_OPEN_FILE:
                     Config::Load();  // make sure the file exists
                     ShellExecuteW(dialog, L"open", L"notepad.exe", Config::Path().c_str(), nullptr, SW_SHOWNORMAL);
@@ -235,9 +325,22 @@ INT_PTR CALLBACK DialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM) {
                 case IDCANCEL: EndDialog(dialog, IDCANCEL); return TRUE;
             }
             break;
-        case WM_DESTROY:
+        case kTestDone:
+            OnTestDone(dialog, *std::unique_ptr<TestResult>(reinterpret_cast<TestResult*>(lParam)));
+            return TRUE;
+        case WM_DESTROY: {
             openDialog = nullptr;
+            {
+                std::lock_guard lock(state.liveness->mutex);
+                state.liveness->alive = false;
+            }
+            // A result posted just before this can't be delivered any more.
+            MSG pending;
+            while (PeekMessageW(&pending, dialog, kTestDone, kTestDone, PM_REMOVE)) {
+                delete reinterpret_cast<TestResult*>(pending.lParam);
+            }
             break;
+        }
     }
     return FALSE;
 }
@@ -251,3 +354,10 @@ bool ShowSettingsDialog(HINSTANCE instance, HWND owner) {
     }
     return DialogBoxParamW(instance, MAKEINTRESOURCEW(IDD_SETTINGS), owner, DialogProc, 0) == IDOK;
 }
+
+#ifndef CALLRECORDER_HAVE_URL_CHECK
+// Temporary until HttpClient.cpp provides it after the merge; remove then.
+bool IsUnencryptedPublicUrl(const std::wstring&) {
+    return false;
+}
+#endif

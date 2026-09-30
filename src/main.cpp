@@ -3,6 +3,7 @@
 
 #include "Autostart.h"
 #include "Config.h"
+#include "HistoryWindow.h"
 #include "Recorder.h"
 #include "Session.h"
 #include "SettingsDialog.h"
@@ -16,6 +17,7 @@
 #include <windowsx.h>
 
 #include <algorithm>
+#include <array>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -34,6 +36,7 @@ constexpr double kMinimumSeconds = 2.0;  // shorter sessions are treated as acci
 
 enum Command : UINT {
     kToggle = 100, kPause, kMarker, kSensitive, kUploadNow, kRetryRefused, kOpenSpeakr, kSettings, kOpenFolder, kExit,
+    kKeepLast, kUploadHeld, kRecordings,
     kTagFirst = 1000,  // kTagFirst + i toggles App::menuTags[i]
     kTagLast = 1999,
 };
@@ -49,6 +52,7 @@ constexpr Hotkey kHotkeys[] = {
     {2, 'P', L"Ctrl+Alt+P", kPause},
     {3, 'K', L"Ctrl+Alt+K", kMarker},  // Ctrl+Alt+M is commonly taken by other apps
 };
+constexpr size_t kHotkeyCount = std::size(kHotkeys);
 
 struct App {
     HINSTANCE instance = nullptr;
@@ -63,6 +67,8 @@ struct App {
     std::unique_ptr<Uploader> uploader;
     std::optional<Session> session;
     std::wstring sessionsDir;
+    std::array<bool, kHotkeyCount> hotkeyRegistered{};  // parallel to kHotkeys; another app may own a combination
+    std::wstring lastMetaPath;  // sidecar of the last recording saved this run, for "Keep last recording"
     bool sensitive = false;  // applies to the current session and the next one
     std::vector<std::wstring> tags;      // Speakr tags for the current session and the next one
     std::vector<std::wstring> menuTags;  // the Tags submenu's items, in order, while it's open
@@ -135,6 +141,7 @@ std::wstring UploadSummary() {
     };
     add(status.waiting, L"waiting to upload");
     add(status.processing, L"being transcribed");
+    add(status.held, L"held");
     add(status.problems, L"with problems");
     return parts.empty() ? L"All recordings are in Speakr" : parts;
 }
@@ -181,9 +188,48 @@ DeviceChoice ChosenDevices() {
     return {config.microphone, config.speakers, config.loopbackApps};
 }
 
+// The hotkey for a command, if it registered (else the tray menu is the only way).
+const Hotkey* RegisteredHotkey(Command command) {
+    for (size_t i = 0; i < kHotkeyCount; ++i) {
+        if (kHotkeys[i].command == command && app.hotkeyRegistered[i]) return &kHotkeys[i];
+    }
+    return nullptr;
+}
+
+// "\tCtrl+Alt+R" for a menu item, or nothing if the hotkey isn't ours.
+std::wstring Accelerator(Command command) {
+    const Hotkey* hotkey = RegisteredHotkey(command);
+    return hotkey ? std::wstring(L"\t") + hotkey->label : std::wstring();
+}
+
+std::wstring Plural(int count, const wchar_t* singular, const wchar_t* plural) {
+    return std::to_wstring(count) + L" " + (count == 1 ? singular : plural);
+}
+
+// "1 minute", "90 seconds".
+std::wstring DelayText(int seconds) {
+    if (seconds % 60 == 0) return Plural(seconds / 60, L"minute", L"minutes");
+    return Plural(seconds, L"second", L"seconds");
+}
+
+// Now plus `seconds`, as an ISO UTC timestamp.
+std::wstring IsoUtcIn(int seconds) {
+    FILETIME now;
+    GetSystemTimeAsFileTime(&now);
+    ULARGE_INTEGER ticks;
+    ticks.LowPart = now.dwLowDateTime;
+    ticks.HighPart = now.dwHighDateTime;
+    ticks.QuadPart += static_cast<ULONGLONG>(seconds) * 10'000'000ULL;  // 100 ns ticks
+    FILETIME later{ticks.LowPart, ticks.HighPart};
+    SYSTEMTIME utc;
+    FileTimeToSystemTime(&later, &utc);
+    return FormatIsoUtc(utc);
+}
+
 void StartRecording() {
     Config config = Config::Load();
-    Session session = Session::Create(app.sessionsDir, app.sensitive, app.tags, config.serverUrl);
+    // An unreadable config fails closed: nothing leaves the PC until it's fixed.
+    Session session = Session::Create(app.sessionsDir, app.sensitive || config.unreadable, app.tags, config.serverUrl);
     std::wstring error;
     if (!app.recorder->Start(session.audioPath, session.title, ChosenDevices(), config.separateChannels, error)) {
         Notify(L"Couldn't start recording", error, NIIF_ERROR);
@@ -193,8 +239,10 @@ void StartRecording() {
     app.session = std::move(session);
     SetTimer(app.window, kTooltipTimer, 1000, nullptr);
     UpdateTray();
-    std::wstring text = app.sensitive ? L"Local only: this session won't be uploaded." : L"Press Ctrl+Alt+R to stop.";
-    if (!app.sensitive && !app.tags.empty()) text += L"\nTags: " + JoinTags(app.tags);
+    const Hotkey* stopKey = RegisteredHotkey(kToggle);
+    std::wstring stopHint = stopKey ? std::wstring(L"Press ") + stopKey->label + L" to stop." : L"Stop it from the tray menu.";
+    std::wstring text = app.session->sensitive ? L"Local only: this session won't be uploaded." : stopHint;
+    if (!app.session->sensitive && !app.tags.empty()) text += L"\nTags: " + JoinTags(app.tags);
     Notify(L"Recording started", text);
 }
 
@@ -213,14 +261,55 @@ void StopRecording() {
         return;
     }
     session.Finish(seconds);
+    // The grace period lets "Keep last recording on this PC" stop the upload.
+    int delay = session.sensitive ? 0 : std::max(Config::Load().uploadDelaySeconds, 0);
+    if (delay > 0) session.uploadAfterUtc = IsoUtcIn(delay);
     session.Save();
-    Notify(L"Recording saved", session.title + L" (" + FormatDuration(seconds) + L")" +
-                                   (session.sensitive ? L"\nKept on this PC only." : L"\nUploading to Speakr."));
+    app.lastMetaPath = session.metaPath;
+
+    std::wstring outcome = L"\nUploading to Speakr.";
+    if (session.sensitive) {
+        outcome = L"\nKept on this PC only.";
+    } else if (delay > 0) {
+        outcome = L"\nUploading to Speakr in " + DelayText(delay) +
+                  L". To keep it on this PC, choose Keep last recording on this PC.";
+    }
+    Notify(L"Recording saved", session.title + L" (" + FormatDuration(seconds) + L")" + outcome);
     if (!session.sensitive) app.uploader->Wake();
+}
+
+// Stops the last recording from being uploaded, if it hasn't been yet.
+void KeepLastRecording() {
+    if (app.lastMetaPath.empty()) return;
+    std::wstring message;
+    {
+        std::lock_guard lock(Session::FileMutex());
+        auto session = Session::Load(app.lastMetaPath);
+        if (!session) {
+            app.lastMetaPath.clear();
+            Notify(L"Recording not found", L"It may have been deleted.", NIIF_WARNING);
+            return;
+        }
+        const std::string& state = session->uploadState;
+        bool attempted = !session->uploadAttemptUtc.empty();  // a request may have reached Speakr
+        if (state == UploadState::kLocalOnly) {
+            message = L"It's already kept on this PC only.";
+        } else if (state == UploadState::kUploaded || state == UploadState::kDone || state == UploadState::kFailed ||
+                   state == UploadState::kMissing || state == UploadState::kStuck ||
+                   (state == UploadState::kPending && attempted)) {
+            message = L"It has already gone to Speakr. Delete it there if you need to.";
+        } else {
+            session->SetSensitive(true);
+            message = session->Save() ? L"Kept on this PC. It won't be uploaded."
+                                      : L"Couldn't update the recording's file.";
+        }
+    }
+    Notify(L"Last recording", message);
 }
 
 // Puts sessions Speakr refused back in the queue (e.g. after fixing the cause).
 void RetryRefused() {
+    std::lock_guard lock(Session::FileMutex());
     for (const auto& path : Session::ListMetaFiles(app.sessionsDir)) {
         auto session = Session::Load(path);
         if (!session || session->uploadState != UploadState::kRejected) continue;
@@ -236,7 +325,10 @@ void TogglePause() {
     bool paused = !app.recorder->IsPaused();
     app.recorder->SetPaused(paused);
     UpdateTray();
-    Notify(paused ? L"Recording paused" : L"Recording resumed", L"Ctrl+Alt+P to toggle.", NIIF_INFO | NIIF_NOSOUND);
+    const Hotkey* pauseKey = RegisteredHotkey(kPause);
+    std::wstring hint = pauseKey ? std::wstring(pauseKey->label) + L" to toggle."
+                                 : std::wstring(L"Use the tray menu to ") + (paused ? L"resume." : L"pause.");
+    Notify(paused ? L"Recording paused" : L"Recording resumed", hint, NIIF_INFO | NIIF_NOSOUND);
 }
 
 void AddMarker() {
@@ -276,9 +368,56 @@ void ToggleTag(size_t index) {
 // Opens Settings and applies what can change straight away: devices (even
 // mid-recording) and anything the uploader reads.
 void OpenSettings() {
+    bool separateBefore = Config::Load().separateChannels;
     if (!ShowSettingsDialog(app.instance, nullptr)) return;
-    if (IsRecording()) app.recorder->SetDevices(ChosenDevices());
+    if (IsRecording()) {
+        app.recorder->SetDevices(ChosenDevices());
+        if (Config::Load().separateChannels != separateBefore) {
+            Notify(L"Settings saved", L"The channel layout applies from the next recording.", NIIF_INFO | NIIF_NOSOUND);
+        }
+    }
     app.uploader->Wake();
+}
+
+// Made for another Speakr server, or before one was set up: waits for the user.
+bool IsHeld(const Session& session, const Config& config) {
+    if (session.uploadState == UploadState::kHeld) return true;
+    return session.uploadState == UploadState::kPending && session.status != "recording" &&
+           session.serverUrl.has_value() &&
+           _wcsicmp(NormalizeServerUrl(*session.serverUrl).c_str(), NormalizeServerUrl(config.serverUrl).c_str()) != 0;
+}
+
+// Asks what to do with recordings made for another (or no) Speakr server.
+void HandleHeld() {
+    Config config = Config::Load();
+    if (config.serverUrl.empty()) return OpenSettings();
+    int count = app.uploader->GetStatus().held;
+    if (count <= 0) return;
+    bool one = count == 1;
+    std::wstring text = (one ? std::wstring(L"1 recording was") : std::to_wstring(count) + L" recordings were") +
+                        L" made before Speakr was set up or for a different server.\n\nUpload " +
+                        (one ? L"it" : L"them") + L" to " + config.serverUrl + L"?\n\nYes: upload " +
+                        (one ? L"it" : L"them") + L". No: keep " + (one ? L"it" : L"them") + L" on this PC only.";
+    int answer = MessageBoxW(app.window, text.c_str(), kAppName,
+                             MB_YESNOCANCEL | MB_ICONQUESTION | MB_DEFBUTTON3 | MB_SETFOREGROUND);
+    if (answer != IDYES && answer != IDNO) return;
+    {
+        std::lock_guard lock(Session::FileMutex());
+        for (const auto& path : Session::ListMetaFiles(app.sessionsDir)) {
+            auto session = Session::Load(path);
+            if (!session || !IsHeld(*session, config)) continue;
+            if (answer == IDYES) {
+                session->serverUrl = config.serverUrl;
+                session->uploadState = UploadState::kPending;
+                session->uploadError.clear();
+            } else {
+                session->SetSensitive(true);
+            }
+            session->Save();
+        }
+    }
+    app.uploader->Wake();
+    UpdateTray();
 }
 
 bool IsSetUp() {
@@ -327,9 +466,11 @@ void ShowMenu(POINT at) {
     bool paused = recording && app.recorder->IsPaused();
     UINT whenRecording = recording ? MF_ENABLED : MF_GRAYED;
 
-    AppendMenuW(menu, MF_STRING, kToggle, recording ? L"Stop recording\tCtrl+Alt+R" : L"Start recording\tCtrl+Alt+R");
-    AppendMenuW(menu, MF_STRING | whenRecording, kPause, paused ? L"Resume\tCtrl+Alt+P" : L"Pause\tCtrl+Alt+P");
-    AppendMenuW(menu, MF_STRING | whenRecording, kMarker, L"Add marker\tCtrl+Alt+K");
+    AppendMenuW(menu, MF_STRING, kToggle,
+                ((recording ? L"Stop recording" : L"Start recording") + Accelerator(kToggle)).c_str());
+    AppendMenuW(menu, MF_STRING | whenRecording, kPause,
+                ((paused ? L"Resume" : L"Pause") + Accelerator(kPause)).c_str());
+    AppendMenuW(menu, MF_STRING | whenRecording, kMarker, (L"Add marker" + Accelerator(kMarker)).c_str());
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | (app.sensitive ? MF_CHECKED : MF_UNCHECKED), kSensitive,
                 L"Sensitive: keep on this PC only");
@@ -338,10 +479,20 @@ void ShowMenu(POINT at) {
     AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(BuildTagsMenu()), tagsLabel.c_str());
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, UploadSummary().c_str());
+    AppendMenuW(menu, MF_STRING | (app.lastMetaPath.empty() ? MF_GRAYED : MF_ENABLED), kKeepLast,
+                L"Keep last recording on this PC");
     AppendMenuW(menu, MF_STRING, kUploadNow, L"Upload now");
-    if (app.uploader->GetStatus().problems > 0) AppendMenuW(menu, MF_STRING, kRetryRefused, L"Retry refused uploads");
+    Uploader::Status status = app.uploader->GetStatus();
+    if (status.held > 0) {
+        std::wstring label = L"Upload " + Plural(status.held, L"held recording", L"held recordings") + L"...";
+        AppendMenuW(menu, MF_STRING, kUploadHeld, label.c_str());
+    }
+    // problems also counts missing and stuck ones, which retrying wouldn't help;
+    // RetryRefused only requeues the refused ones.
+    if (status.problems > 0) AppendMenuW(menu, MF_STRING, kRetryRefused, L"Retry refused uploads");
     AppendMenuW(menu, MF_STRING, kOpenSpeakr, L"Open Speakr");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kRecordings, L"Recordings...");
     AppendMenuW(menu, MF_STRING, kOpenFolder, L"Open recordings folder");
     AppendMenuW(menu, MF_STRING, kSettings, L"Settings...");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
@@ -362,6 +513,11 @@ void RunCommand(UINT command) {
         case kPause: TogglePause(); break;
         case kMarker: AddMarker(); break;
         case kSensitive: ToggleSensitive(); break;
+        case kKeepLast: KeepLastRecording(); break;
+        case kUploadHeld: HandleHeld(); break;
+        case kRecordings:
+            ShowHistoryWindow(app.instance, app.sessionsDir, Config::Load().serverUrl, [] { app.uploader->Wake(); });
+            break;
         case kUploadNow: app.uploader->Wake(); break;
         case kRetryRefused: RetryRefused(); break;
         case kOpenSpeakr: {
@@ -478,7 +634,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
                                  nullptr, instance, nullptr);
     app.taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
     Config config = Config::Load();
-    app.sensitive = config.sensitiveByDefault;
+    app.sensitive = config.sensitiveByDefault || config.unreadable;  // unreadable: fail closed
     app.tags = config.tags;
     Autostart::RepairPath();
     int recovered = Session::RecoverInterrupted(app.sessionsDir);  // before the uploader looks at them
@@ -492,12 +648,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     AddTrayIcon();
 
     std::wstring unavailable;
-    for (const auto& hotkey : kHotkeys) {
-        if (!RegisterHotKey(app.window, hotkey.id, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, hotkey.key)) {
-            unavailable += (unavailable.empty() ? L"" : L", ") + std::wstring(hotkey.label);
-        }
+    for (size_t i = 0; i < kHotkeyCount; ++i) {
+        const Hotkey& hotkey = kHotkeys[i];
+        app.hotkeyRegistered[i] = RegisterHotKey(app.window, hotkey.id, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, hotkey.key);
+        if (!app.hotkeyRegistered[i]) unavailable += (unavailable.empty() ? L"" : L", ") + std::wstring(hotkey.label);
     }
-    if (!unavailable.empty()) {
+    // Windows shows one notification at a time; the most important goes last.
+    if (config.unreadable) {
+        Notify(L"Settings unreadable",
+               L"Your settings file couldn't be read, so recordings stay on this PC. Fix or reset it in Settings.",
+               NIIF_WARNING);
+    } else if (!unavailable.empty()) {
         Notify(L"Some shortcuts are taken", unavailable + L" is used by another app. Use the tray menu instead.",
                NIIF_WARNING);
     } else if (recovered > 0) {
@@ -510,6 +671,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
     MSG message;
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+        if (IsHistoryWindowMessage(&message)) continue;  // Tab/Enter/Esc in the Recordings window
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }
