@@ -10,7 +10,7 @@ constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Ru
 // Task Manager's on/off switch for Run entries: first byte even = enabled,
 // odd = disabled; no value = enabled.
 constexpr wchar_t kApprovedKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run";
-constexpr wchar_t kValueName[] = L"CallRecorder";
+constexpr wchar_t kValueName[] = L"MeetingRecorder";
 
 std::wstring ThisExe() {
     std::wstring path(MAX_PATH, L'\0');
@@ -24,13 +24,13 @@ std::wstring ThisExe() {
     }
 }
 
-std::wstring RegisteredCommand() {
+std::wstring RegisteredCommand(const wchar_t* name = kValueName) {
     DWORD bytes = 0;
-    if (RegGetValueW(HKEY_CURRENT_USER, kRunKey, kValueName, RRF_RT_REG_SZ, nullptr, nullptr, &bytes) != ERROR_SUCCESS) {
+    if (RegGetValueW(HKEY_CURRENT_USER, kRunKey, name, RRF_RT_REG_SZ, nullptr, nullptr, &bytes) != ERROR_SUCCESS) {
         return {};
     }
     std::wstring value(bytes / sizeof(wchar_t), L'\0');
-    if (RegGetValueW(HKEY_CURRENT_USER, kRunKey, kValueName, RRF_RT_REG_SZ, nullptr, value.data(), &bytes) != ERROR_SUCCESS) {
+    if (RegGetValueW(HKEY_CURRENT_USER, kRunKey, name, RRF_RT_REG_SZ, nullptr, value.data(), &bytes) != ERROR_SUCCESS) {
         return {};
     }
     value.resize(wcsnlen(value.c_str(), value.size()));
@@ -45,10 +45,10 @@ std::wstring Unquote(const std::wstring& command) {
     return command;
 }
 
-bool DisabledInTaskManager() {
+bool DisabledInTaskManager(const wchar_t* name = kValueName) {
     BYTE data[12] = {};
     DWORD bytes = sizeof data;
-    if (RegGetValueW(HKEY_CURRENT_USER, kApprovedKey, kValueName, RRF_RT_REG_BINARY, nullptr, data, &bytes) != ERROR_SUCCESS) {
+    if (RegGetValueW(HKEY_CURRENT_USER, kApprovedKey, name, RRF_RT_REG_BINARY, nullptr, data, &bytes) != ERROR_SUCCESS) {
         return false;
     }
     return bytes > 0 && (data[0] & 1) != 0;
@@ -81,6 +81,14 @@ void RepairPath() {
     std::wstring registered = Unquote(RegisteredCommand());
     if (registered.empty() || GetFileAttributesW(registered.c_str()) != INVALID_FILE_ATTRIBUTES) return;
     Register(ThisExe());
+}
+
+void AdoptEntry(const wchar_t* oldName) {
+    if (RegisteredCommand(oldName).empty()) return;
+    bool enabled = !DisabledInTaskManager(oldName);
+    RegDeleteKeyValueW(HKEY_CURRENT_USER, kRunKey, oldName);
+    RegDeleteKeyValueW(HKEY_CURRENT_USER, kApprovedKey, oldName);
+    if (enabled && RegisteredCommand().empty()) Register(ThisExe());
 }
 
 }  // namespace Autostart

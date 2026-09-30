@@ -16,8 +16,8 @@
 
 namespace {
 
-constexpr wchar_t kClassName[] = L"CallRecorderHistoryWindow";
-constexpr wchar_t kAppName[] = L"CallRecorder";
+constexpr wchar_t kClassName[] = L"MeetingRecorderHistoryWindow";
+constexpr wchar_t kAppName[] = L"MeetingRecorder";
 constexpr UINT_PTR kRefreshTimer = 1;
 constexpr UINT kRefreshMs = 2000;
 
@@ -659,7 +659,7 @@ void ShowHistoryWindow(HINSTANCE instance, const std::wstring& sessionsDir, cons
     const int x = work.left + (work.right - work.left - width) / 2;
     const int y = work.top + (work.bottom - work.top - height) / 2;
 
-    HWND window = CreateWindowExW(WS_EX_CONTROLPARENT, kClassName, L"CallRecorder recordings", style, x, y, width,
+    HWND window = CreateWindowExW(WS_EX_CONTROLPARENT, kClassName, L"MeetingRecorder recordings", style, x, y, width,
                                   height, nullptr, nullptr, instance, nullptr);
     if (!window) {
         ui = Ui();

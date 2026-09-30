@@ -1,4 +1,4 @@
-# Builds CallRecorder with the MSVC toolchain, CMake, Ninja and vcpkg that ship
+# Builds MeetingRecorder with the MSVC toolchain, CMake, Ninja and vcpkg that ship
 # with Visual Studio 2022, then runs the unit tests (skip with -SkipTests).
 # Usage: .\build.ps1 [-Config release|debug] [-SkipTests]
 param(
@@ -23,7 +23,7 @@ try {
     if ($LASTEXITCODE) { throw 'CMake configure failed.' }
     cmake --build --preset $Config
     if ($LASTEXITCODE) { throw 'Build failed.' }
-    Write-Host "Built: $PSScriptRoot\build\$Config\CallRecorder.exe"
+    Write-Host "Built: $PSScriptRoot\build\$Config\MeetingRecorder.exe"
     if (-not $SkipTests) {
         ctest --preset $Config
         if ($LASTEXITCODE) { throw 'Tests failed.' }

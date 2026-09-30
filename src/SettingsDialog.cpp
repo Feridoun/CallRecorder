@@ -285,13 +285,13 @@ void FinishSave(HWND dialog) {
         return SetStatus(dialog, L"Windows Credential Manager refused to store the token.");
     }
     if (!config.Save()) {
-        return (void)MessageBoxW(dialog, (L"Couldn't write " + Config::Path() + L".").c_str(), L"CallRecorder",
+        return (void)MessageBoxW(dialog, (L"Couldn't write " + Config::Path() + L".").c_str(), L"MeetingRecorder",
                                  MB_OK | MB_ICONERROR);
     }
     bool autostart = IsDlgButtonChecked(dialog, IDC_AUTOSTART) == BST_CHECKED;
     if (autostart != Autostart::IsEnabled() && !Autostart::SetEnabled(autostart)) {
         MessageBoxW(dialog, L"Your settings were saved, but Windows refused to change Start at login.",
-                    L"CallRecorder", MB_OK | MB_ICONWARNING);
+                    L"MeetingRecorder", MB_OK | MB_ICONWARNING);
     }
     EndDialog(dialog, IDOK);
 }
@@ -306,7 +306,7 @@ void Save(HWND dialog) {
     if (!connectionChanged) return FinishSave(dialog);
     if (IsInsecure(dialog) &&
         MessageBoxW(dialog, (std::wstring(kInsecureWarning) + L"\n\nSave this address anyway?").c_str(),
-                    L"CallRecorder", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) {
+                    L"MeetingRecorder", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) {
         return;
     }
     BeginTest(dialog, true);
@@ -319,7 +319,7 @@ void OnTestDone(HWND dialog, const TestResult& result) {
     SetStatus(dialog, text);
     if (!result.thenSave) return;
     if (!result.ok &&
-        MessageBoxW(dialog, (result.text + L"\n\nSave these settings anyway?").c_str(), L"CallRecorder",
+        MessageBoxW(dialog, (result.text + L"\n\nSave these settings anyway?").c_str(), L"MeetingRecorder",
                     MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) {
         return;
     }

@@ -21,7 +21,7 @@ std::wstring FormatFileStamp(const SYSTEMTIME& utc);
 // "1:02:03" or "2:03".
 std::wstring FormatDuration(double seconds);
 
-// %LOCALAPPDATA%\CallRecorder\sessions, created if missing. Deliberately not
+// %LOCALAPPDATA%\MeetingRecorder\sessions, created if missing. Deliberately not
 // under Documents, which is often redirected to OneDrive.
 std::wstring SessionsDirectory();
 

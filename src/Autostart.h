@@ -16,4 +16,8 @@ bool SetEnabled(bool enabled);
 // repoint it at this one. Leaves a working entry for another copy alone.
 void RepairPath();
 
+// Replaces an entry made under the app's old name with one for this .exe, if
+// it was switched on. A switched-off entry is just removed.
+void AdoptEntry(const wchar_t* oldName);
+
 }  // namespace Autostart

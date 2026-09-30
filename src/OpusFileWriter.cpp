@@ -41,7 +41,7 @@ bool OpusFileWriter::Open(const std::wstring& path, const std::wstring& title, i
 
     comments_ = ope_comments_create();
     ope_comments_add(comments_, "TITLE", ToUtf8(title).c_str());
-    ope_comments_add(comments_, "ENCODER", "CallRecorder " CALLRECORDER_VERSION);
+    ope_comments_add(comments_, "ENCODER", "MeetingRecorder " MEETINGRECORDER_VERSION);
     if (channels == 2) ope_comments_add(comments_, "CHANNELS", "left:microphone,right:others");
 
     int status = OPE_OK;

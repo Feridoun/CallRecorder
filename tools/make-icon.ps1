@@ -1,4 +1,4 @@
-# Draws res\CallRecorder.ico: a red record dot in a speech bubble, at the
+# Draws res\MeetingRecorder.ico: a red record dot in a speech bubble, at the
 # sizes Windows asks for (16 to 256 px, PNG-compressed entries).
 #   powershell -ExecutionPolicy Bypass -File tools\make-icon.ps1
 # -StoreLogo writes build\store\logo-1080.png for the Microsoft Store listing
@@ -67,6 +67,6 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 foreach ($image in $images) { $writer.Write($image) }
 $writer.Flush()
 
-$path = Join-Path (Split-Path -Parent $PSScriptRoot) 'res\CallRecorder.ico'
+$path = Join-Path (Split-Path -Parent $PSScriptRoot) 'res\MeetingRecorder.ico'
 [System.IO.File]::WriteAllBytes($path, $out.ToArray())
 "Wrote $path"

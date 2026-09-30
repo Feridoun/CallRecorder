@@ -14,12 +14,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build and test
         shell: pwsh
-        # build.ps1 builds the app and CallRecorderTests, then runs ctest and
+        # build.ps1 builds the app and MeetingRecorderTests, then runs ctest and
         # fails on any test failure (-SkipTests would skip that).
         run: |
           $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
           .\build.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: CallRecorder-unsigned
-          path: build/release/CallRecorder.exe
+          name: MeetingRecorder-unsigned
+          path: build/release/MeetingRecorder.exe

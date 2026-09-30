@@ -7,11 +7,11 @@
 # card, so SimplySign Desktop must be running and connected first, or
 # signtool fails with "No private key is available".
 #
-#   .\tools\sign.ps1 -Path build\release\CallRecorder.exe -CertThumbprint 4CA3...
-#   $env:CALLRECORDER_SIGN_THUMBPRINT = '4CA3...'; .\tools\sign.ps1 -Path file.exe
+#   .\tools\sign.ps1 -Path build\release\MeetingRecorder.exe -CertThumbprint 4CA3...
+#   $env:MEETINGRECORDER_SIGN_THUMBPRINT = '4CA3...'; .\tools\sign.ps1 -Path file.exe
 param(
     [Parameter(Mandatory = $true)][string]$Path,
-    [string]$CertThumbprint = $env:CALLRECORDER_SIGN_THUMBPRINT,
+    [string]$CertThumbprint = $env:MEETINGRECORDER_SIGN_THUMBPRINT,
     [string]$TimestampUrl = 'http://time.certum.pl'
 )
 $ErrorActionPreference = 'Stop'
@@ -30,7 +30,7 @@ function Find-SignTool {
     throw 'signtool.exe not found. Install the Windows SDK (winget install Microsoft.WindowsSDK.10.0.26100).'
 }
 
-if (-not $CertThumbprint) { throw 'No certificate thumbprint: pass -CertThumbprint or set CALLRECORDER_SIGN_THUMBPRINT.' }
+if (-not $CertThumbprint) { throw 'No certificate thumbprint: pass -CertThumbprint or set MEETINGRECORDER_SIGN_THUMBPRINT.' }
 $CertThumbprint = $CertThumbprint -replace '\s', ''
 
 # The .NET store API rather than the Cert: drive, which fails to load when
@@ -44,8 +44,8 @@ if ($cert.NotAfter -lt (Get-Date)) { throw "Certificate $CertThumbprint expired 
 
 $signtool = Find-SignTool
 $file = (Resolve-Path $Path).Path
-& $signtool sign /sha1 $CertThumbprint /fd sha256 /tr $TimestampUrl /td sha256 /d 'CallRecorder' `
-    /du 'https://github.com/Feridoun/CallRecorder' $file | Out-Null
+& $signtool sign /sha1 $CertThumbprint /fd sha256 /tr $TimestampUrl /td sha256 /d 'MeetingRecorder' `
+    /du 'https://github.com/Feridoun/MeetingRecorder' $file | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign $file" }
 & $signtool verify /pa /q $file | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Signature verification failed on $file" }

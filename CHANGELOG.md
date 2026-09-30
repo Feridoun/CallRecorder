@@ -1,13 +1,23 @@
 # Changelog
 
-All notable changes to CallRecorder are listed here. The format follows
+All notable changes to MeetingRecorder (called CallRecorder up to 1.2) are
+listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.3.0] - 2026-09-30
+
+### Changed
+
+- **CallRecorder is now MeetingRecorder**, a better fit for a Speakr companion
+  that's mostly used for meetings. On first start it moves your settings
+  (`%APPDATA%\MeetingRecorder`), recordings (`%LOCALAPPDATA%\MeetingRecorder`),
+  Speakr API token and Start at login setting over from CallRecorder. The
+  installer upgrades CallRecorder in place and removes its old program files
+  and shortcuts.
 
 ### Added
 
-- **Call detection.** CallRecorder notices when Teams, Zoom, Webex, Slack,
+- **Call detection.** MeetingRecorder notices when Teams, Zoom, Webex, Slack,
   Skype, WhatsApp, Discord, 8x8, MicroSIP, Linphone, RingCentral, or Google
   Meet or Teams in a browser, starts using the microphone. By default it offers
   to record, and to stop when the call ends. **Detect calls** in Settings
@@ -130,6 +140,7 @@ reach it. Use Pause (`Ctrl+Alt+P`) or Sensitive mode for private moments.
 - First release: records both sides of a call to Ogg Opus with one hotkey and
   uploads it to your Speakr server.
 
-[1.2.0]: https://github.com/Feridoun/CallRecorder/releases/tag/v1.2.0
-[1.1.0]: https://github.com/Feridoun/CallRecorder/releases/tag/v1.1.0
-[1.0.0]: https://github.com/Feridoun/CallRecorder/releases/tag/v1.0.0
+[1.3.0]: https://github.com/Feridoun/MeetingRecorder/releases/tag/v1.3.0
+[1.2.0]: https://github.com/Feridoun/MeetingRecorder/releases/tag/v1.2.0
+[1.1.0]: https://github.com/Feridoun/MeetingRecorder/releases/tag/v1.1.0
+[1.0.0]: https://github.com/Feridoun/MeetingRecorder/releases/tag/v1.0.0

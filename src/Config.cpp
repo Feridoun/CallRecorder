@@ -76,7 +76,7 @@ std::wstring Config::Path() {
     PWSTR base = nullptr;
     std::wstring dir;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &base))) {
-        dir = std::wstring(base) + L"\\CallRecorder";
+        dir = std::wstring(base) + L"\\MeetingRecorder";
     }
     CoTaskMemFree(base);
     if (dir.empty()) return {};
@@ -184,7 +184,7 @@ std::wstring NormalizeServerUrl(std::wstring url) {
 }
 
 namespace {
-constexpr wchar_t kCredentialName[] = L"CallRecorder:Speakr";
+constexpr wchar_t kCredentialName[] = L"MeetingRecorder:Speakr";
 }
 
 bool WriteSpeakrToken(const std::string& token) {
@@ -192,8 +192,8 @@ bool WriteSpeakrToken(const std::string& token) {
     CREDENTIALW credential{};
     credential.Type = CRED_TYPE_GENERIC;
     credential.TargetName = const_cast<wchar_t*>(kCredentialName);
-    credential.Comment = const_cast<wchar_t*>(L"Speakr API token for CallRecorder uploads");
-    credential.UserName = const_cast<wchar_t*>(L"CallRecorder");
+    credential.Comment = const_cast<wchar_t*>(L"Speakr API token for MeetingRecorder uploads");
+    credential.UserName = const_cast<wchar_t*>(L"MeetingRecorder");
     credential.Persist = CRED_PERSIST_LOCAL_MACHINE;
     credential.CredentialBlob = reinterpret_cast<BYTE*>(secret.data());
     credential.CredentialBlobSize = static_cast<DWORD>(secret.size() * sizeof(wchar_t));

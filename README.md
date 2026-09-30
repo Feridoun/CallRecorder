@@ -1,8 +1,11 @@
-# CallRecorder
+# MeetingRecorder
 
-A small Windows tray app that records calls and online meetings and sends them
-to your self-hosted [Speakr](https://github.com/murtaza-nasir/speakr) server
-for transcription and summaries.
+A companion to [Speakr](https://github.com/murtaza-nasir/speakr): a small
+Windows tray app that records your meetings and calls and sends them to your
+self-hosted Speakr server for transcription and summaries.
+
+Called CallRecorder up to version 1.2. Upgrading moves your settings,
+recordings, API token and Start at login setting across on first start.
 
 It records **both sides of a call** without a virtual audio cable: your
 microphone mixed with whatever your speakers or headset are playing (Teams,
@@ -38,29 +41,29 @@ ready.
 
 ## Install
 
-Download from [Releases](https://github.com/Feridoun/CallRecorder/releases/latest):
+Download from [Releases](https://github.com/Feridoun/MeetingRecorder/releases/latest):
 
-- **`CallRecorder-Setup-<version>.exe`**: installer. Installs for your user
-  only (no admin prompt) and can start CallRecorder when you sign in.
-- **`CallRecorder-<version>-portable.zip`**: the same `.exe` with no installer.
+- **`MeetingRecorder-Setup-<version>.exe`**: installer. Installs for your user
+  only (no admin prompt) and can start MeetingRecorder when you sign in.
+- **`MeetingRecorder-<version>-portable.zip`**: the same `.exe` with no installer.
 
 Both are code-signed. Needs Windows 10 or 11 (64-bit) and a Speakr server you
-can reach. Without one, CallRecorder still records to your PC and keeps the
+can reach. Without one, MeetingRecorder still records to your PC and keeps the
 recordings there (see the Recordings window and local-only mode below).
 
-On first start, CallRecorder asks for:
+On first start, MeetingRecorder asks for:
 
 1. **Your Speakr address**, e.g. `https://speakr.example.com` or
    `http://192.168.1.20:8899`.
 2. **An API token.** In Speakr, open *Account settings > API tokens* and create
-   one. CallRecorder keeps it in Windows Credential Manager, never in a file.
+   one. MeetingRecorder keeps it in Windows Credential Manager, never in a file.
 
 Click **Test** to check both, then **Save**. The test runs in the background,
 so the window and your hotkeys stay responsive if the server is slow. You can
 change them later under **Settings** in the tray menu.
 
 If you close the window without setting up Speakr, recordings stay on this PC.
-They are **held**: when you add a server later, CallRecorder asks before
+They are **held**: when you add a server later, MeetingRecorder asks before
 sending them (see [Held recordings](#held-recordings)).
 
 ## Use
@@ -76,7 +79,7 @@ A grey dot appears in the tray.
 Click the icon for the menu, which also has **Sensitive**, **Tags**, upload
 status, **Keep last recording on this PC**, **Upload now**, **Open Speakr**,
 **Recordings...**, the recordings folder and **Settings**. If another app
-already uses one of the shortcuts, CallRecorder tells you at start-up and
+already uses one of the shortcuts, MeetingRecorder tells you at start-up and
 leaves that shortcut out of the menu.
 
 Tray icon colours: **grey** idle, **red** recording, **purple** recording in
@@ -95,7 +98,7 @@ this PC** makes the recording local-only, so it is never uploaded. Use it when
 a call turned out to be private.
 
 It only works until the upload starts. If the recording has already gone to
-Speakr, CallRecorder tells you, and you need to delete it in Speakr. Sensitive
+Speakr, MeetingRecorder tells you, and you need to delete it in Speakr. Sensitive
 recordings have no delay because they never upload.
 
 ### Recordings window
@@ -122,7 +125,7 @@ file is gone).
 
 ### Held recordings
 
-CallRecorder never sends a recording to a server it wasn't made for. A
+MeetingRecorder never sends a recording to a server it wasn't made for. A
 recording is **held** if you made it before Speakr was set up, or for a
 different server address from the one in Settings. It stays on your PC, and a
 notification tells you. The tray menu then shows **Upload N held
@@ -144,21 +147,21 @@ first upload.
 
 ### Audio devices
 
-By default CallRecorder records Windows' default communications microphone and
+By default MeetingRecorder records Windows' default communications microphone and
 default playback device, and follows them when they change. To record a
 specific device instead, pick it under **Microphone** or **Playback** in
 **Settings**. The choice takes effect as soon as you save, even
-mid-recording. If the chosen device isn't connected, CallRecorder uses the
+mid-recording. If the chosen device isn't connected, MeetingRecorder uses the
 Windows default and switches back when the device returns.
 
 If Windows blocks desktop apps from using the microphone (Settings > Privacy &
-security > Microphone), CallRecorder tells you so, rather than saying no
+security > Microphone), MeetingRecorder tells you so, rather than saying no
 microphone was found. If the microphone is silent for a minute, it warns you
 too.
 
 ### Detect calls
 
-CallRecorder notices when a call starts in Teams, Zoom, Webex, Slack, Skype,
+MeetingRecorder notices when a call starts in Teams, Zoom, Webex, Slack, Skype,
 WhatsApp, Discord, 8x8, MicroSIP, Linphone or RingCentral, or in Google Meet
 or Teams in a browser. It watches which apps are using a microphone (the same
 list the Windows Volume Mixer shows). For a browser, a window must also be
@@ -185,13 +188,13 @@ Teams call** while a call is going on.
 
 ### Only record audio from these apps
 
-By default CallRecorder records everything your PC plays. To record only your
+By default MeetingRecorder records everything your PC plays. To record only your
 call app, list it under **Only these apps** in **Settings**, comma-separated,
 e.g. `Teams.exe, Zoom.exe`. Only audio those apps play is recorded, including
 audio from their child processes (browsers and call apps often play sound from
 helper processes). Your microphone is recorded as usual.
 
-This needs a recent build of Windows 10 or 11. If it can't start, CallRecorder
+This needs a recent build of Windows 10 or 11. If it can't start, MeetingRecorder
 warns you and records all playback audio instead. Leave the box
 empty to record all playback audio.
 
@@ -205,7 +208,7 @@ recording.
 
 ### Echo cancellation (optional)
 
-By default CallRecorder opens the microphone normally. Set
+By default MeetingRecorder opens the microphone normally. Set
 `"echo_cancellation": true` in `config.json` (there is no checkbox for it) to
 open it as a communications stream, which asks Windows to apply echo
 cancellation where your device supports it. What you get depends on the device
@@ -237,7 +240,7 @@ you can play them, and upload one later if you change your mind.
 
 The rules on recording calls vary by country and state. Many places require
 everyone on the call to consent, and some workplaces have their own policies.
-Tell people you're recording. CallRecorder doesn't announce itself to other
+Tell people you're recording. MeetingRecorder doesn't announce itself to other
 people on the call.
 
 ## Settings
@@ -245,7 +248,7 @@ people on the call.
 Tray menu > **Settings** has everything in one window: the Speakr connection,
 audio devices, default tags, hotwords, how long to keep audio, the upload
 delay, which apps to record, call detection, separate channels, local-only mode at launch and
-**Start CallRecorder when I sign in to Windows**. Saved changes apply straight
+**Start MeetingRecorder when I sign in to Windows**. Saved changes apply straight
 away, apart from the channel layout, which applies from the next recording.
 
 Saving only tests the connection if you changed the address or token, so you
@@ -253,7 +256,7 @@ can change a device or tag while the server is unreachable. If the address
 uses plain `http://` to something that isn't on a private network, Settings
 warns you (see [Good to know](#good-to-know)).
 
-The settings live in `%APPDATA%\CallRecorder\config.json` (**Open settings
+The settings live in `%APPDATA%\MeetingRecorder\config.json` (**Open settings
 file** in the Settings window). Edits made by hand apply within 10 minutes, or
 straight away after **Upload now**.
 
@@ -277,7 +280,7 @@ straight away after **Upload now**.
 | Key | Meaning |
 |---|---|
 | `server_url` | Your Speakr address |
-| `tags` | Tags ticked when CallRecorder starts |
+| `tags` | Tags ticked when MeetingRecorder starts |
 | `hotwords` | Comma-separated names and jargon to help transcription, e.g. `"Anika, Kubernetes, SLA"` |
 | `keep_audio_days` | Delete local audio this many days after Speakr has finished with it (0 = keep forever). Only recordings with notes ready are ever deleted. Local-only, held, failed, stuck and missing recordings keep their audio |
 | `sensitive_by_default` | Start every launch in local-only mode |
@@ -289,14 +292,14 @@ straight away after **Upload now**.
 | `call_detection` | When a call starts: `"ask"` (default) offers to record it, `"auto"` records it and stops when it ends, `"off"` does nothing. See [Detect calls](#detect-calls) |
 
 If `config.json` can't be read (a typo that breaks the JSON, or a locked file),
-CallRecorder starts in local-only mode so nothing is uploaded by accident, and
+MeetingRecorder starts in local-only mode so nothing is uploaded by accident, and
 tells you. Fix the file, or save from **Settings**: saving replaces it, and
 keeps the old one as `config.json.bad`. Saving otherwise keeps your key order
-and any keys CallRecorder doesn't know.
+and any keys MeetingRecorder doesn't know.
 
 ## Where recordings go
 
-`%LOCALAPPDATA%\CallRecorder\sessions\` (tray menu > **Open recordings
+`%LOCALAPPDATA%\MeetingRecorder\sessions\` (tray menu > **Open recordings
 folder**). This is kept out of Documents because Documents is often synced to
 OneDrive.
 
@@ -320,7 +323,7 @@ The `.json` file also records which server the recording was made for, and
 when a pending upload is due.
 
 If a crash or power cut leaves a recording with no readable `.json` file, it is
-recovered when CallRecorder next starts: a new `.json` file is made and the
+recovered when MeetingRecorder next starts: a new `.json` file is made and the
 recording is kept **local-only**, because whether it was sensitive is lost with
 the file. Upload it from the Recordings window if you want it in Speakr. A
 damaged `.json` file is set aside as `.json.bad`. Recordings cut short by a
@@ -338,8 +341,8 @@ Uninstalling leaves your recordings and settings in place.
   best for clean transcripts. On speakers, `"echo_cancellation": true` in
   `config.json` may help where your device supports echo cancellation, but
   Windows may lower other apps' sound while you record.
-- **CallRecorder records your microphone even when you're muted in Teams,
-  Zoom or another call app.** Their mute button doesn't reach CallRecorder. For
+- **MeetingRecorder records your microphone even when you're muted in Teams,
+  Zoom or another call app.** Their mute button doesn't reach MeetingRecorder. For
   a private aside, use **Pause** (`Ctrl+Alt+P`) or **Sensitive**.
 - Plain `http://` sends your recordings and API token across the network
   unencrypted. Use `https://` if you can. Settings warns you about `http://`
@@ -363,14 +366,14 @@ Needs Visual Studio 2022 with the *Desktop development with C++* workload
 .\build.ps1                  # or: .\build.ps1 -Config debug
 ```
 
-The output is `build\release\CallRecorder.exe`. Dependencies (`opus`,
+The output is `build\release\MeetingRecorder.exe`. Dependencies (`opus`,
 `libopusenc`, `nlohmann-json`) come from vcpkg in manifest mode and are linked
 statically.
 
 `build.ps1` also builds and runs the unit tests (`tests/`, the non-UI logic:
 settings, recording files, upload decisions). Add `-SkipTests` to skip them,
 or run `build
-elease\CallRecorderTests.exe` directly.
+elease\MeetingRecorderTests.exe` directly.
 
 To build the installer and portable zip as well (needs
 [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
@@ -396,7 +399,7 @@ To build the installer and portable zip as well (needs
 | `src/Config.*` | `config.json` and the Credential Manager token |
 | `src/Json.h` | Type-checked JSON reads that never throw |
 | `tests/` | Unit tests (run by `build.ps1` and CI) |
-| `installer/CallRecorder.iss` | Inno Setup script |
+| `installer/MeetingRecorder.iss` | Inno Setup script |
 
 ## Roadmap ideas
 
@@ -408,11 +411,11 @@ Issues and pull requests are welcome.
 
 ## Privacy
 
-CallRecorder has no telemetry and only talks to the Speakr server you set up.
+MeetingRecorder has no telemetry and only talks to the Speakr server you set up.
 See the [privacy policy](PRIVACY.md).
 
 ## Licence
 
-[MIT](LICENSE). CallRecorder is an independent project, not affiliated with
+[MIT](LICENSE). MeetingRecorder is an independent project, not affiliated with
 Speakr. Third-party licences are in
 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).

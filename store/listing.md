@@ -1,26 +1,26 @@
 # Microsoft Store submission
 
-Everything Partner Center asks for, ready to paste. CallRecorder is submitted
+Everything Partner Center asks for, ready to paste. MeetingRecorder is submitted
 as an **EXE app**: the Store downloads the signed Inno Setup installer from
 GitHub Releases and runs it silently, so no MSIX packaging is needed.
 
 ## Before each submission
 
-1. Bump the version in `CMakeLists.txt` and `res/CallRecorder.manifest`, then
+1. Bump the version in `CMakeLists.txt` and `res/MeetingRecorder.manifest`, then
    build and sign with `.\tools\release.ps1 -CertThumbprint <sha1>`.
 2. Publish a GitHub release tagged `v<version>` with
-   `CallRecorder-Setup-<version>.exe` attached. The Store needs a URL that
+   `MeetingRecorder-Setup-<version>.exe` attached. The Store needs a URL that
    always serves the same file, so never replace an asset in an existing
    release; publish a new version instead.
 3. In Partner Center, open the app > **Packages**, and set the package URL to
-   `https://github.com/Feridoun/CallRecorder/releases/download/v<version>/CallRecorder-Setup-<version>.exe`
+   `https://github.com/Feridoun/MeetingRecorder/releases/download/v<version>/MeetingRecorder-Setup-<version>.exe`
 4. Update **What's new** in the listing, then submit.
 
 ## Packages
 
 | Field | Value |
 |---|---|
-| Package URL | `https://github.com/Feridoun/CallRecorder/releases/download/v1.2.0/CallRecorder-Setup-1.2.0.exe` |
+| Package URL | `https://github.com/Feridoun/MeetingRecorder/releases/download/v1.3.0/MeetingRecorder-Setup-1.3.0.exe` |
 | Architecture | x64 |
 | Language | English (United States) |
 | App type | EXE |
@@ -36,22 +36,22 @@ Inno Setup exit codes:
 | 0 | Installation successful |
 | 2 | Installation cancelled by user (before installing) |
 | 5 | Installation cancelled by user (during installing) |
-| 7 | CallRecorder is running and didn't exit when asked. Exit it from the tray and try again (custom) |
+| 7 | MeetingRecorder is running and didn't exit when asked. Exit it from the tray and try again (custom) |
 | 8 | Reboot required |
 | 1, 3, 4 | Setup failed (miscellaneous) |
 
 ## Store listing (English)
 
-**Product name:** CallRecorder
-If the name is taken, try `CallRecorder for Speakr` or `Speakr Call Recorder`.
+**Product name:** MeetingRecorder
+If the name is taken, try `MeetingRecorder for Speakr` or `Speakr Meeting Recorder`.
 
 **Short description** (1,000 characters max):
 
-> A companion app for people who run, or have access to, a Speakr server (self-hosted transcription). Record both sides of any call or online meeting (Teams, Zoom, Google Meet, WhatsApp, a softphone) with one hotkey, and CallRecorder uploads it to your Speakr server for a transcript and summary. It also keeps recordings on your PC, so you can play them or keep them local-only.
+> A companion app for people who run, or have access to, a Speakr server (self-hosted transcription). Record both sides of any call or online meeting (Teams, Zoom, Google Meet, WhatsApp, a softphone) with one hotkey, and MeetingRecorder uploads it to your Speakr server for a transcript and summary. It also keeps recordings on your PC, so you can play them or keep them local-only.
 
 **Description** (10,000 characters max):
 
-> CallRecorder is for people who run, or have access to, a Speakr server. Speakr (https://github.com/murtaza-nasir/speakr) is free, self-hosted transcription software. CallRecorder is a small tray app that records calls and online meetings and sends them to that server for transcripts and summaries. If you don't use Speakr, you can still use CallRecorder to record calls to your PC and play them back, but the transcripts and summaries come from Speakr, and CallRecorder doesn't make them itself.
+> MeetingRecorder is for people who run, or have access to, a Speakr server. Speakr (https://github.com/murtaza-nasir/speakr) is free, self-hosted transcription software. MeetingRecorder is a small tray app that records calls and online meetings and sends them to that server for transcripts and summaries. If you don't use Speakr, you can still use MeetingRecorder to record calls to your PC and play them back, but the transcripts and summaries come from Speakr, and MeetingRecorder doesn't make them itself.
 >
 > It records both sides of a call without a virtual audio cable: your microphone, mixed with whatever your speakers or headset are playing. That works with Teams, Zoom, Google Meet, WhatsApp, softphones and any other calling app. Press Ctrl+Alt+R to start and again to stop. A notification tells you when Speakr has the notes ready.
 >
@@ -68,7 +68,7 @@ If the name is taken, try `CallRecorder for Speakr` or `Speakr Call Recorder`.
 > Recordings wait 60 seconds (you can change this) before they upload. Nothing recorded before you set up a server, or for a different server, is sent without asking you.
 >
 > RECORD JUST WHAT YOU WANT
-> Choose "Only record audio from these apps" (for example Teams.exe) so other sounds on your PC stay out of the recording. Needs a recent Windows 10 or 11; if it can't start, CallRecorder warns you and records all playback audio. Or record you and the others on separate stereo channels for better speaker labels.
+> Choose "Only record audio from these apps" (for example Teams.exe) so other sounds on your PC stay out of the recording. Needs a recent Windows 10 or 11; if it can't start, MeetingRecorder warns you and records all playback audio. Or record you and the others on separate stereo channels for better speaker labels.
 >
 > MARKERS AND TAGS
 > Press Ctrl+Alt+K at a key moment. In Speakr's notes, each marker links to that point in the audio. Pick Speakr tags from the tray menu so Speakr applies the right summary prompt.
@@ -77,18 +77,18 @@ If the name is taken, try `CallRecorder for Speakr` or `Speakr Call Recorder`.
 > Uploads are queued and retried while your server is unreachable (for example when you're offline or the VPN is down).
 >
 > PRIVATE BY DESIGN
-> No accounts, analytics or telemetry. CallRecorder only talks to the Speakr server you choose, and keeps your API token in Windows Credential Manager.
+> No accounts, analytics or telemetry. MeetingRecorder only talks to the Speakr server you choose, and keeps your API token in Windows Credential Manager.
 >
 > REQUIREMENTS
-> A Speakr server you can reach (https://github.com/murtaza-nasir/speakr) to get transcripts and summaries. It is not included and isn't part of this app. Without one, CallRecorder only records to your PC.
+> A Speakr server you can reach (https://github.com/murtaza-nasir/speakr) to get transcripts and summaries. It is not included and isn't part of this app. Without one, MeetingRecorder only records to your PC.
 >
 > GOOD TO KNOW
-> CallRecorder records your microphone even if you're muted in your call app. Use Pause or Sensitive mode for private moments. Plain http:// addresses send recordings and your API token unencrypted, and Settings warns you about them.
+> MeetingRecorder records your microphone even if you're muted in your call app. Use Pause or Sensitive mode for private moments. Plain http:// addresses send recordings and your API token unencrypted, and Settings warns you about them.
 >
 > PLEASE RECORD LAWFULLY
 > The rules on recording calls vary by country and state, and many places require everyone on the call to consent. Tell people you're recording.
 >
-> CallRecorder is free and open source (MIT licence) and isn't affiliated with Speakr.
+> MeetingRecorder is free and open source (MIT licence) and isn't affiliated with Speakr.
 
 **What's new in this version:**
 
@@ -102,7 +102,7 @@ If the name is taken, try `CallRecorder for Speakr` or `Speakr Call Recorder`.
 > - Pause cuts exactly when you press it, and loud audio is limited softly instead of clipping.
 > - Settings no longer freezes while testing a slow connection.
 > - Many fixes: no crash on a damaged settings file, local audio is no longer deleted if Speakr loses a recording, no duplicate uploads after an interruption, and recordings can't overwrite each other after a clock change.
-> - Warning: CallRecorder records your microphone even when you're muted in Teams or Zoom. Use Pause or Sensitive mode.
+> - Warning: MeetingRecorder records your microphone even when you're muted in Teams or Zoom. Use Pause or Sensitive mode.
 
 **Product features** (up to 20, 200 characters each):
 
@@ -123,15 +123,15 @@ If the name is taken, try `CallRecorder for Speakr` or `Speakr Call Recorder`.
 
 **Category:** Productivity (subcategory: none)
 
-**Privacy policy URL:** https://github.com/Feridoun/CallRecorder/blob/main/PRIVACY.md
+**Privacy policy URL:** https://github.com/Feridoun/MeetingRecorder/blob/main/PRIVACY.md
 
-**Website:** https://github.com/Feridoun/CallRecorder
+**Website:** https://github.com/Feridoun/MeetingRecorder
 
-**Support contact:** https://github.com/Feridoun/CallRecorder/issues
+**Support contact:** https://github.com/Feridoun/MeetingRecorder/issues
 
 **Copyright:** © 2026 Fareedoon Ahmed
 
-**Additional license terms:** MIT licence: https://github.com/Feridoun/CallRecorder/blob/main/LICENSE
+**Additional license terms:** MIT licence: https://github.com/Feridoun/MeetingRecorder/blob/main/LICENSE
 
 **System requirements:** Minimum: Microphone. Windows 10 or later, x64.
 
@@ -174,7 +174,7 @@ This should come out at **3+ / Everyone**.
 
 Paste this into **Submission options > Notes for certification**:
 
-> CallRecorder is a system tray app with no main window. After install, look for the grey dot in the notification area (it may be in the overflow "^" area).
+> MeetingRecorder is a system tray app with no main window. After install, look for the grey dot in the notification area (it may be in the overflow "^" area).
 >
 > On first launch the Settings window opens and asks for a Speakr server address and API token. Speakr is a self-hosted transcription server (https://github.com/murtaza-nasir/speakr). You can cancel this dialog: recording works without a server.
 >

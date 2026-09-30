@@ -131,7 +131,7 @@ bool Session::Save() const {
         markerList.push_back({{"offset_seconds", Round1(m.offsetSeconds)}, {"label", ToUtf8(m.label)}});
     }
     json j = {
-        {"app", "CallRecorder"},
+        {"app", "MeetingRecorder"},
         {"format", 1},
         {"id", ToUtf8(id)},
         {"title", ToUtf8(title)},
